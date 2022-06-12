@@ -19,8 +19,6 @@ public:
     };
 
 private:
-    struct Bus;
-
     struct Stop {
         std::string name;
         Coordinates coordinates;
