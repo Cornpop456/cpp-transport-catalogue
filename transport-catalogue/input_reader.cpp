@@ -1,27 +1,26 @@
 #include "input_reader.h"
 
 #include <iostream>
-#include <sstream>
 
 using namespace std;
 
 namespace transport {
 
-int detail::ReadNumber() {
+int detail::ReadNumber(istream& in) {
     int res;
 
-    cin >> res;
+    in >> res;
 
     string line_feed; 
-    getline(cin, line_feed);
+    getline(in, line_feed);
 
     return res;
 }
 
-pair<string, input::QueryType> input::ReadQuery() {
+pair<string, input::QueryType> input::ReadQuery(istream& in) {
     string query_name;
 
-    cin >> query_name;
+    in >> query_name;
     
     QueryType t;
     
@@ -34,7 +33,7 @@ pair<string, input::QueryType> input::ReadQuery() {
     }
 
     string str; 
-    getline(cin, str);
+    getline(in, str);
 
     if (str.empty()) {
         return {"", t};

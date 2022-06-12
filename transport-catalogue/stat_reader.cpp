@@ -6,10 +6,10 @@ using namespace std;
 
 namespace transport {
 
-pair<string, output::QueryType> output::ReadQuery() {
+pair<string, output::QueryType> output::ReadQuery(std::istream& in) {
     string query_name;
 
-    cin >> query_name;
+    in >> query_name;
     
     QueryType t;
     
@@ -22,7 +22,7 @@ pair<string, output::QueryType> output::ReadQuery() {
     }
 
     string str; 
-    getline(cin, str);
+    getline(in, str);
 
     if (str.empty()) {
         return {"", t};
@@ -33,7 +33,7 @@ pair<string, output::QueryType> output::ReadQuery() {
 
 void output::PrintBusStat(const string& name, 
     const optional<TransportCatalogue::BusStat>& opt_stat, 
-    ostream& out) {
+    ostream& out) { // <- вывод уже был вынесен в аргумент out
 
     if (opt_stat) {
         out << "Bus " << name << ": " << opt_stat.value() << endl;
@@ -45,7 +45,7 @@ void output::PrintBusStat(const string& name,
 
 void output::PrintBusesThroughStop(const std::string& name, 
     const optional<set<string_view>> opt_buses,
-    std::ostream& out) {
+    std::ostream& out) { // <- вывод уже был вынесен в аргумент out
 
     if (!opt_buses) {
         out << "Stop " << name << ": " << "not found" << endl;

@@ -1,11 +1,13 @@
 #include "transport_catalogue.h"
 
+#include <iostream>
+
 using namespace std;
 
 namespace transport {
 
 void TransportCatalogue::AddStop(const parsed::Stop& stop) {
-    Stop s = Stop{stop.name, Coordinates{stop.lat, stop.lng}, set<Bus*>{}};
+    Stop s = Stop{stop.name, Coordinates{stop.lat, stop.lng}, set<string_view>{}};
     
     stops_.push_back(move(s));
 
@@ -28,10 +30,6 @@ void TransportCatalogue::AddDistances(const parsed::Distances& dists) {
     }
 }
 
-bool TransportCatalogue::FindStop(const string& name) const {
-    return stopname_to_stop_.count(name) > 0;
-}
-
 void TransportCatalogue::AddBus(const parsed::Bus& bus) {
     Bus b;
     b.name = bus.name;
@@ -43,10 +41,16 @@ void TransportCatalogue::AddBus(const parsed::Bus& bus) {
 
     for (const string& el : bus.stops) {
         added->bus_stops.push_back(stopname_to_stop_.at(el));
-        stopname_to_stop_.at(el)->buses_through.insert(added);
+        stopname_to_stop_.at(el)->buses_through.insert(string_view{added->name});
     }
 
     busname_to_bus_[string_view{added->name}] = added;
+
+    bus_stats_[string_view{added->name}] = CalculateStat(added->name);
+}
+
+bool TransportCatalogue::FindStop(const string& name) const {
+    return stopname_to_stop_.count(name) > 0;
 }
 
 bool TransportCatalogue::FindBus(const string& name) const {
@@ -54,10 +58,26 @@ bool TransportCatalogue::FindBus(const string& name) const {
 }
 
 std::optional<TransportCatalogue::BusStat> TransportCatalogue::GetBusStat(const std::string& name) const {
-    if (busname_to_bus_.count(name) == 0) {
+    if (bus_stats_.count(name) == 0) {
         return nullopt;
     }
 
+    return bus_stats_.at(name);
+}
+
+optional<set<string_view>> TransportCatalogue::GetBusesThroughStop(const std::string& name) const {
+    if (stopname_to_stop_.count(name) == 0) {
+        return nullopt;
+    }
+
+    return stopname_to_stop_.at(name)->buses_through;
+}
+
+unsigned int TransportCatalogue::GetStopsDistance(const std::string& from, const std::string& dest) const {
+    return distances_.at({stopname_to_stop_.at(from), stopname_to_stop_.at(dest)});
+}
+
+TransportCatalogue::BusStat TransportCatalogue::CalculateStat(const std::string& name) const {
     Bus* b = busname_to_bus_.at(name);
 
     int stops_count = b->bus_stops.size();
@@ -96,24 +116,6 @@ std::optional<TransportCatalogue::BusStat> TransportCatalogue::GetBusStat(const 
     }
 
     return BusStat{stops_count, unique_stops_count, actual_length, actual_length / geo_length};
-}
-
-optional<set<string_view>> TransportCatalogue::GetBusesThroughStop(const std::string& name) const {
-    if (stopname_to_stop_.count(name) == 0) {
-        return nullopt;
-    }
-
-    set<string_view> res;
-
-    for (auto el : stopname_to_stop_.at(name)->buses_through) {
-        res.insert(el->name);
-    }
-
-    return res;
-}
-
-unsigned int TransportCatalogue::GetStopsDistance(const std::string& from, const std::string& dest) const {
-    return distances_.at({stopname_to_stop_.at(from), stopname_to_stop_.at(dest)});
 }
 
 size_t TransportCatalogue::DistanceHasher::operator()(const std::pair<Stop*, Stop*>& p) const {

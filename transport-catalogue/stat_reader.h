@@ -14,7 +14,7 @@ enum class QueryType {
     WRONG
 };
 
-std::pair<std::string, QueryType> ReadQuery();
+std::pair<std::string, QueryType> ReadQuery(std::istream& in);
 
 void PrintBusStat(const std::string& name, 
     const std::optional<TransportCatalogue::BusStat>& opt_stat, 

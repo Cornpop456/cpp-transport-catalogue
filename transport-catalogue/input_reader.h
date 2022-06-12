@@ -36,7 +36,7 @@ enum class QueryType {
     WRONG
 };
 
-std::pair<std::string, QueryType> ReadQuery();
+std::pair<std::string, QueryType> ReadQuery(std::istream& in);
 
 std::pair<parsed::Stop, parsed::Distances> ReadStop(std::string_view str);
 
@@ -46,9 +46,8 @@ parsed::Bus ReadBus(std::string_view str);
 
 namespace detail {
 
-int ReadNumber();
+int ReadNumber(std::istream& in);
 
 } // detail
-
 
 } // transport

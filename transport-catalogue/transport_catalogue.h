@@ -2,9 +2,7 @@
 
 #include <deque>
 #include <optional>
-#include <unordered_map>
 #include <set>
-#include <string_view>
 
 #include "geo.h"
 #include "input_reader.h"
@@ -12,13 +10,21 @@
 namespace transport {
 
 class TransportCatalogue {
+public:
+    struct BusStat {
+        int all_stops;
+        int unique_stops;
+        unsigned int length;
+        double curvature;
+    };
+
 private:
     struct Bus;
 
     struct Stop {
         std::string name;
         Coordinates coordinates;
-        std::set<Bus*> buses_through;
+        std::set<std::string_view> buses_through;
     };
 
     struct Bus {
@@ -38,18 +44,14 @@ private:
     std::unordered_map<std::string_view, Stop*> stopname_to_stop_;
     
     std::deque<Bus> buses_;
+    std::unordered_map<std::string_view, BusStat> bus_stats_;
     std::unordered_map<std::string_view, Bus*> busname_to_bus_;
 
     std::unordered_map<std::pair<Stop*, Stop*>, int, DistanceHasher> distances_;
+
+    BusStat CalculateStat(const std::string& name) const;
     
 public:
-    struct BusStat {
-        int all_stops;
-        int unique_stops;
-        unsigned int length;
-        double curvature;
-    };
-    
     void AddStop(const parsed::Stop& stop);
     void AddBus(const parsed::Bus& route);
     void AddDistances(const parsed::Distances& dists);
