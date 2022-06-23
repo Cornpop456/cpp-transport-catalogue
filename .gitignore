@@ -33,3 +33,4 @@
 
 # input output text files
 *.txt
+*.json

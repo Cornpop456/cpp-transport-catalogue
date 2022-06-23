@@ -1,13 +1,11 @@
 #include "transport_catalogue.h"
 
-#include <iostream>
-
 using namespace std;
 
 namespace transport {
 
 void TransportCatalogue::AddStop(const parsed::Stop& stop) {
-    Stop s = Stop{stop.name, Coordinates{stop.lat, stop.lng}, set<string_view>{}};
+    Stop s = Stop{stop.name, geo::Coordinates{stop.lat, stop.lng}, set<string_view>{}};
     
     stops_.push_back(move(s));
 
@@ -65,12 +63,12 @@ std::optional<TransportCatalogue::BusStat> TransportCatalogue::GetBusStat(const 
     return bus_stats_.at(name);
 }
 
-optional<set<string_view>> TransportCatalogue::GetBusesThroughStop(const std::string& name) const {
+set<string_view>* TransportCatalogue::GetBusesThroughStop(const std::string& name) const {
     if (stopname_to_stop_.count(name) == 0) {
-        return nullopt;
+        return nullptr;
     }
 
-    return stopname_to_stop_.at(name)->buses_through;
+    return &stopname_to_stop_.at(name)->buses_through;
 }
 
 unsigned int TransportCatalogue::GetStopsDistance(const std::string& from, const std::string& dest) const {
@@ -101,7 +99,7 @@ TransportCatalogue::BusStat TransportCatalogue::CalculateStat(const std::string&
             uniq_stops.insert(b->bus_stops[i]->name);
         }
 
-        geo_length += detail::ComputeDistance(b->bus_stops[i]->coordinates, b->bus_stops[i + 1]->coordinates);
+        geo_length += geo::ComputeDistance(b->bus_stops[i]->coordinates, b->bus_stops[i + 1]->coordinates);
         actual_length += distances_.at({b->bus_stops[i], b->bus_stops[i + 1]});
     }
 

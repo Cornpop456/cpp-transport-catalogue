@@ -4,8 +4,7 @@
 #include <optional>
 #include <set>
 
-#include "geo.h"
-#include "input_reader.h"
+#include "domain.h"
 
 namespace transport {
 
@@ -19,18 +18,6 @@ public:
     };
 
 private:
-    struct Stop {
-        std::string name;
-        Coordinates coordinates;
-        std::set<std::string_view> buses_through;
-    };
-
-    struct Bus {
-        std::string name;
-        std::vector<Stop*> bus_stops;
-        bool circular;
-    };
-
     struct DistanceHasher {
         size_t operator()(const std::pair<Stop*, Stop*>& p) const;
 
@@ -57,7 +44,7 @@ public:
     bool FindStop(const std::string& name) const;
     bool FindBus(const std::string& name) const;
 
-    std::optional<std::set<std::string_view>> GetBusesThroughStop(const std::string& name) const;
+    std::set<std::string_view>* GetBusesThroughStop(const std::string& name) const;
     std::optional<BusStat> GetBusStat(const std::string& name) const;
     unsigned int GetStopsDistance(const std::string& from, const std::string& dest) const;
 };
