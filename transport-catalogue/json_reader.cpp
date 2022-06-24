@@ -1,6 +1,6 @@
 #include "json.h"
 #include "json_reader.h"
-
+#include "map_renderer.h"
 
 using namespace std;
 
@@ -16,9 +16,66 @@ const json::Array& GetBaseRequests(const json::Document& doc) {
     return doc.GetRoot().AsMap().at("base_requests"s).AsArray();
 }
 
+const json::Dict& GetRenderSettings(const json::Document& doc) {
+    return doc.GetRoot().AsMap().at("render_settings"s).AsMap();
+}
+
 const json::Array& GetStatRequests(const json::Document& doc) {
     return doc.GetRoot().AsMap().at("stat_requests"s).AsArray();
 }
+
+ svg::Color GetColorFromNode(const json::Node& n) {
+    if (n.IsString()) {
+        return n.AsString();
+    } 
+    
+    const json::Array& arr = n.AsArray();
+
+    if (arr.size() == 3) {
+        return svg::Rgb{
+            static_cast<uint8_t>(arr[0].AsInt()), 
+            static_cast<uint8_t>(arr[1].AsInt()), 
+            static_cast<uint8_t>(arr[2].AsInt())};
+    } 
+    
+    return svg::Rgba{
+        static_cast<uint8_t>(arr[0].AsInt()), 
+        static_cast<uint8_t>(arr[1].AsInt()), 
+        static_cast<uint8_t>(arr[2].AsInt()), 
+        arr[3].AsDouble()};
+}
+
+RenderSettings DictToRenderSettings(const json::Dict& settings_dict) {
+    RenderSettings settings;
+    
+    settings.width = settings_dict.at("width"s).AsDouble();
+    settings.height = settings_dict.at("height"s).AsDouble();
+    settings.padding = settings_dict.at("padding"s).AsDouble();
+    settings.line_width = settings_dict.at("line_width"s).AsDouble();
+    settings.stop_radius = settings_dict.at("stop_radius"s).AsDouble();
+    settings.bus_label_font_size = settings_dict.at("bus_label_font_size"s).AsInt();
+
+    const auto& blo = settings_dict.at("bus_label_offset"s).AsArray();
+
+    settings.bus_label_offset = {blo[0].AsDouble(), blo[1].AsDouble()};
+    settings.stop_label_font_size = settings_dict.at("stop_label_font_size"s).AsInt();
+
+    const auto& slo = settings_dict.at("stop_label_offset"s).AsArray();
+
+    settings.stop_label_offset = {slo[0].AsDouble(), slo[1].AsDouble()};
+
+    settings.underlayer_color = GetColorFromNode(settings_dict.at("underlayer_color"s));
+
+    settings.underlayer_width  = settings_dict.at("underlayer_width"s).AsDouble();
+
+    for (const json::Node& n: settings_dict.at("color_palette"s).AsArray()) {
+        settings.color_palette.push_back(GetColorFromNode(n));
+    }
+
+    return settings;
+}
+
+
     
 parsed::Bus DictToBus(const json::Dict& bus_dict) {
     parsed::Bus bus;
@@ -150,10 +207,50 @@ void PrintOutput(const TransportCatalogue& catalogue, const json::Array& request
 
 namespace json_reader {
 
-void ProcessJSON(TransportCatalogue& catalogue, std::istream& in, std::ostream& out) {
+void ProcessJSON(TransportCatalogue& catalogue, std::istream& in, std::ostream& out,
+    Format out_format) {
+
     auto json = ReadJSON(in);
     FillCatalogue(catalogue, GetBaseRequests(json));
-    PrintOutput(catalogue, GetStatRequests(json), out);
+    
+    if (out_format == Format::JSON) {
+        PrintOutput(catalogue, GetStatRequests(json), out);
+        return;
+    }
+
+    if (out_format == Format::SVG) {
+        auto dict = GetRenderSettings(json);
+
+        auto settings = DictToRenderSettings(dict);
+
+        vector<geo::Coordinates> all_coords;
+
+        for (auto el : *catalogue.GetBusNames()) {
+            const auto& bus_stops = catalogue.GetBus(el)->bus_stops;
+
+            for (const auto stop : bus_stops) {
+                all_coords.push_back(stop->coordinates);
+            }
+
+        }
+
+        SphereProjector proj(all_coords.begin(), all_coords.end(), 
+            settings.width, 
+            settings.height, 
+            settings.padding);
+
+        all_coords.clear();
+
+        MapRenderer renderer(proj, settings);
+
+        for (auto el : *catalogue.GetBusNames()) {
+            renderer.AddBusToSvg(catalogue.GetBus(el));
+        }
+
+        const svg::Document& svg_doc = renderer.GetSvgDoc();
+
+        svg_doc.Render(out);
+    }
 }
 
 } // json_reader

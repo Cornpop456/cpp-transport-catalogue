@@ -36,6 +36,7 @@ void TransportCatalogue::AddBus(const parsed::Bus& bus) {
     buses_.push_back(move(b));
 
     Bus* added = &buses_.back();
+    bus_names_.insert(string_view{added->name});
 
     for (const string& el : bus.stops) {
         added->bus_stops.push_back(stopname_to_stop_.at(el));
@@ -55,7 +56,7 @@ bool TransportCatalogue::FindBus(const string& name) const {
     return busname_to_bus_.count(name) > 0;
 }
 
-std::optional<TransportCatalogue::BusStat> TransportCatalogue::GetBusStat(const std::string& name) const {
+optional<TransportCatalogue::BusStat> TransportCatalogue::GetBusStat(const string& name) const {
     if (bus_stats_.count(name) == 0) {
         return nullopt;
     }
@@ -63,7 +64,7 @@ std::optional<TransportCatalogue::BusStat> TransportCatalogue::GetBusStat(const 
     return bus_stats_.at(name);
 }
 
-set<string_view>* TransportCatalogue::GetBusesThroughStop(const std::string& name) const {
+set<string_view>* TransportCatalogue::GetBusesThroughStop(const string& name) const {
     if (stopname_to_stop_.count(name) == 0) {
         return nullptr;
     }
@@ -71,11 +72,20 @@ set<string_view>* TransportCatalogue::GetBusesThroughStop(const std::string& nam
     return &stopname_to_stop_.at(name)->buses_through;
 }
 
-unsigned int TransportCatalogue::GetStopsDistance(const std::string& from, const std::string& dest) const {
+unsigned int TransportCatalogue::GetStopsDistance(const string& from, const string& dest) const {
     return distances_.at({stopname_to_stop_.at(from), stopname_to_stop_.at(dest)});
 }
 
-TransportCatalogue::BusStat TransportCatalogue::CalculateStat(const std::string& name) const {
+
+const set<string_view>* TransportCatalogue::GetBusNames() const {
+    return &bus_names_;
+}
+
+const Bus* TransportCatalogue::GetBus(string_view name) const {
+    return busname_to_bus_.at(name);
+}
+
+TransportCatalogue::BusStat TransportCatalogue::CalculateStat(const string& name) const {
     Bus* b = busname_to_bus_.at(name);
 
     int stops_count = b->bus_stops.size();
@@ -116,7 +126,7 @@ TransportCatalogue::BusStat TransportCatalogue::CalculateStat(const std::string&
     return BusStat{stops_count, unique_stops_count, actual_length, actual_length / geo_length};
 }
 
-size_t TransportCatalogue::DistanceHasher::operator()(const std::pair<Stop*, Stop*>& p) const {
+size_t TransportCatalogue::DistanceHasher::operator()(const pair<Stop*, Stop*>& p) const {
     size_t lat_1 = d_hasher_(p.first->coordinates.lat);
     size_t lng_1 = d_hasher_(p.first->coordinates.lng);
 

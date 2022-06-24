@@ -29,6 +29,7 @@ private:
     std::unordered_map<std::string_view, Stop*> stopname_to_stop_;
     
     std::deque<Bus> buses_;
+    std::set<std::string_view> bus_names_;
     std::unordered_map<std::string_view, BusStat> bus_stats_;
     std::unordered_map<std::string_view, Bus*> busname_to_bus_;
 
@@ -44,6 +45,8 @@ public:
     bool FindStop(const std::string& name) const;
     bool FindBus(const std::string& name) const;
 
+    const std::set<std::string_view>* GetBusNames() const;
+    const Bus* GetBus(std::string_view name) const;
     std::set<std::string_view>* GetBusesThroughStop(const std::string& name) const;
     std::optional<BusStat> GetBusStat(const std::string& name) const;
     unsigned int GetStopsDistance(const std::string& from, const std::string& dest) const;

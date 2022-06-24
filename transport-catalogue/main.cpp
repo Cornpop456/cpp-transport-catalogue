@@ -19,6 +19,6 @@ int main() {
     
     TransportCatalogue catalogue;
 
-    json_reader::ProcessJSON(catalogue, cin, cout);
+    json_reader::ProcessJSON(catalogue, cin, cout, Format::SVG);
 }
 
