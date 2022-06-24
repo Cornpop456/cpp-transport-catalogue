@@ -202,6 +202,38 @@ void PrintOutput(const TransportCatalogue& catalogue, const json::Array& request
     json::Print(json::Document(arr), out);
 }
 
+void BuildSvgMap(const TransportCatalogue& catalogue, const json::Dict& settings_dict, std::ostream& out) {
+    auto settings = DictToRenderSettings(settings_dict);
+
+    vector<geo::Coordinates> all_coords;
+
+    for (auto el : *catalogue.GetBusNames()) {
+        const auto& bus_stops = catalogue.GetBus(el)->bus_stops;
+
+        for (const auto stop : bus_stops) {
+            all_coords.push_back(stop->coordinates);
+        }
+
+    }
+
+    SphereProjector proj(all_coords.begin(), all_coords.end(), 
+        settings.width, 
+        settings.height, 
+        settings.padding);
+
+    all_coords.clear();
+
+    MapRenderer renderer(proj, settings);
+
+    for (auto el : *catalogue.GetBusNames()) {
+        renderer.AddBusToSvg(catalogue.GetBus(el));
+    }
+
+    const svg::Document& svg_doc = renderer.GetSvgDoc();
+
+    svg_doc.Render(out);
+}
+
 } // namespace
 
 
@@ -212,44 +244,14 @@ void ProcessJSON(TransportCatalogue& catalogue, std::istream& in, std::ostream& 
 
     auto json = ReadJSON(in);
     FillCatalogue(catalogue, GetBaseRequests(json));
-    
-    if (out_format == Format::JSON) {
-        PrintOutput(catalogue, GetStatRequests(json), out);
-        return;
-    }
 
-    if (out_format == Format::SVG) {
-        auto dict = GetRenderSettings(json);
+    switch (out_format) {
+        case Format::JSON:
+            PrintOutput(catalogue, GetStatRequests(json), out);
+            break;
+        case Format::SVG:
+            BuildSvgMap(catalogue, GetRenderSettings(json), out);
 
-        auto settings = DictToRenderSettings(dict);
-
-        vector<geo::Coordinates> all_coords;
-
-        for (auto el : *catalogue.GetBusNames()) {
-            const auto& bus_stops = catalogue.GetBus(el)->bus_stops;
-
-            for (const auto stop : bus_stops) {
-                all_coords.push_back(stop->coordinates);
-            }
-
-        }
-
-        SphereProjector proj(all_coords.begin(), all_coords.end(), 
-            settings.width, 
-            settings.height, 
-            settings.padding);
-
-        all_coords.clear();
-
-        MapRenderer renderer(proj, settings);
-
-        for (auto el : *catalogue.GetBusNames()) {
-            renderer.AddBusToSvg(catalogue.GetBus(el));
-        }
-
-        const svg::Document& svg_doc = renderer.GetSvgDoc();
-
-        svg_doc.Render(out);
     }
 }
 
