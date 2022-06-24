@@ -91,9 +91,9 @@ struct RenderSettings {
     double line_width;
     double stop_radius;
     int bus_label_font_size;
-    std::pair<double, double> bus_label_offset;
+    svg::Point bus_label_offset;
     int stop_label_font_size;
-    std::pair<double, double> stop_label_offset;
+    svg::Point stop_label_offset;
     double underlayer_width;
     svg::Color underlayer_color;
     std::vector<svg::Color> color_palette;

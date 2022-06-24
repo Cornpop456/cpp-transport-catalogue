@@ -57,12 +57,12 @@ RenderSettings DictToRenderSettings(const json::Dict& settings_dict) {
 
     const auto& blo = settings_dict.at("bus_label_offset"s).AsArray();
 
-    settings.bus_label_offset = {blo[0].AsDouble(), blo[1].AsDouble()};
+    settings.bus_label_offset = svg::Point{blo[0].AsDouble(), blo[1].AsDouble()};
     settings.stop_label_font_size = settings_dict.at("stop_label_font_size"s).AsInt();
 
     const auto& slo = settings_dict.at("stop_label_offset"s).AsArray();
 
-    settings.stop_label_offset = {slo[0].AsDouble(), slo[1].AsDouble()};
+    settings.stop_label_offset = svg::Point{slo[0].AsDouble(), slo[1].AsDouble()};
 
     settings.underlayer_color = GetColorFromNode(settings_dict.at("underlayer_color"s));
 
