@@ -241,16 +241,16 @@ void PrintOutput(const RequestHandler& handler, const json::Array& requests, std
 
             arr.push_back(move(json_stop_buses));
         } else if (type == "Map"s) {
-            json::Dict json_stop_buses;
-            json_stop_buses["request_id"s] = json::Node{id};
+            json::Dict json_svg_map;
+            json_svg_map["request_id"s] = json::Node{id};
 
             stringstream map_string;
 
             BuildSvgMap(handler, map_string);
 
-            json_stop_buses["map"s] = json::Node{map_string.str()};
+            json_svg_map["map"s] = json::Node{map_string.str()};
 
-            arr.push_back(move(json_stop_buses));
+            arr.push_back(move(json_svg_map));
 
         } else {
             throw invalid_argument("wrong query to catalogue"s);
