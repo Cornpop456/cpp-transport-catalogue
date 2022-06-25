@@ -21,6 +21,13 @@
 
 namespace transport {
 
+struct BusStat {
+    int all_stops;
+    int unique_stops;
+    unsigned int length;
+    double curvature;
+};
+
 struct Stop {
     std::string name;
     geo::Coordinates coordinates;

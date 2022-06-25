@@ -18,7 +18,6 @@ int main() {
     using namespace transport;
     
     TransportCatalogue catalogue;
-
     json_reader::ProcessJSON(catalogue, cin, cout, Format::SVG);
 }
 

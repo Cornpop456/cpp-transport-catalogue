@@ -9,14 +9,6 @@
 namespace transport {
 
 class TransportCatalogue {
-public:
-    struct BusStat {
-        int all_stops;
-        int unique_stops;
-        unsigned int length;
-        double curvature;
-    };
-
 private:
     struct DistanceHasher {
         size_t operator()(const std::pair<Stop*, Stop*>& p) const;

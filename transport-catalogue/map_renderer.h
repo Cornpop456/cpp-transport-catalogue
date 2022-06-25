@@ -84,6 +84,8 @@ private:
 };
 
 
+namespace renderer {
+
 struct RenderSettings {
     double width;
     double height;
@@ -101,23 +103,25 @@ struct RenderSettings {
 
 class MapRenderer {
 private:
-    const SphereProjector& proj_;
-    const RenderSettings& settings_;
+    SphereProjector proj_;
+    RenderSettings settings_;
+    std::vector<const Bus*> buses_;
+    std::vector<const Stop*> stops_;
     svg::Document svg_doc_;
     int color_index_ = 0;
 
 public:
-    MapRenderer(const SphereProjector& proj, const RenderSettings& settings);
+    MapRenderer(SphereProjector proj, 
+        RenderSettings settings, 
+        std::vector<const Bus*> buses, 
+        std::vector<const Stop*> stops);
 
-    void AddLinesToSvg(const std::vector<const Bus*>& buses);
-    
-    void AddBusLabelsToSvg(const std::vector<const Bus*>& buses);
+    void AddLinesToSvg();
+    void AddBusLabelsToSvg();
+    void AddStopSymToSvg();
+    void AddStopLabelsToSvg();
 
-    void AddStopSymToSvg(const std::vector<const Stop*>& stops);
-
-    void AddStopLabelsToSvg(const std::vector<const Stop*>& stops);
-
-    const svg::Document& GetSvgDoc();
+    const svg::Document& GetSvgDoc() const;
 };
 
 namespace map_objects {
@@ -184,5 +188,6 @@ private:
 
 } // map_objects
 
+} // renderer
 
 } // transport

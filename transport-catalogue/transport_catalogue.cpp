@@ -56,7 +56,7 @@ bool TransportCatalogue::FindBus(const string& name) const {
     return busname_to_bus_.count(name) > 0;
 }
 
-optional<TransportCatalogue::BusStat> TransportCatalogue::GetBusStat(const string& name) const {
+optional<BusStat> TransportCatalogue::GetBusStat(const string& name) const {
     if (bus_stats_.count(name) == 0) {
         return nullopt;
     }
@@ -85,7 +85,7 @@ const Bus* TransportCatalogue::GetBus(string_view name) const {
     return busname_to_bus_.at(name);
 }
 
-TransportCatalogue::BusStat TransportCatalogue::CalculateStat(const string& name) const {
+BusStat TransportCatalogue::CalculateStat(const string& name) const {
     Bus* b = busname_to_bus_.at(name);
 
     int stops_count = b->bus_stops.size();

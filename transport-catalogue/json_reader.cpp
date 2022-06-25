@@ -1,6 +1,6 @@
 #include "json.h"
 #include "json_reader.h"
-#include "map_renderer.h"
+#include "request_handler.h"
 
 using namespace std;
 
@@ -45,8 +45,8 @@ const json::Array& GetStatRequests(const json::Document& doc) {
         arr[3].AsDouble()};
 }
 
-RenderSettings DictToRenderSettings(const json::Dict& settings_dict) {
-    RenderSettings settings;
+renderer::RenderSettings DictToRenderSettings(const json::Dict& settings_dict) {
+    renderer::RenderSettings settings;
     
     settings.width = settings_dict.at("width"s).AsDouble();
     settings.height = settings_dict.at("height"s).AsDouble();
@@ -107,6 +107,44 @@ std::pair<parsed::Stop, parsed::Distances> DictToStopDists(const json::Dict& sto
     return {p_s, p_d};
 }
 
+renderer::MapRenderer GetRenderer(const TransportCatalogue& catalogue, renderer::RenderSettings settings) {
+    vector<geo::Coordinates> all_coords;
+
+    vector<const Bus*> buses;
+
+    auto comp = [] (const Stop* a, const Stop* b) {
+        return a->name < b->name;
+    };
+
+    set<const Stop*, decltype(comp)> stops(comp);
+
+    for (auto el : *catalogue.GetBusNames()) {
+                
+        buses.push_back(catalogue.GetBus(el));
+        
+        const auto& bus_stops = catalogue.GetBus(el)->bus_stops;
+
+        for (const auto stop : bus_stops) {
+            all_coords.push_back(stop->coordinates);
+            stops.insert(stop);
+        }
+    }
+
+    SphereProjector proj(all_coords.begin(), all_coords.end(), 
+        settings.width, 
+        settings.height, 
+        settings.padding);
+
+    all_coords.clear();
+
+    vector<const Stop*> stops_vec(make_move_iterator(stops.begin()), 
+        make_move_iterator(stops.end()));
+
+    renderer::MapRenderer map_renderer(move(proj), move(settings), move(buses), move(stops_vec));
+
+    return map_renderer;
+}
+
 void FillCatalogue(TransportCatalogue& catalogue, const json::Array& requests) {
     vector<parsed::Bus> add_bus_deferred;
     vector<parsed::Distances> add_dists_deferred;
@@ -141,7 +179,7 @@ void FillCatalogue(TransportCatalogue& catalogue, const json::Array& requests) {
     }
 }
 
-void PrintOutput(const TransportCatalogue& catalogue, const json::Array& requests, std::ostream& out) {
+void PrintOutput(const RequestHandler& handler, const json::Array& requests, std::ostream& out) {
     json::Array arr;
     arr.reserve(requests.size());
     
@@ -154,7 +192,7 @@ void PrintOutput(const TransportCatalogue& catalogue, const json::Array& request
         const string& type = dict.at("type"s).AsString();
 
         if (type == "Bus"s) {
-            const auto bus_stat_opt = catalogue.GetBusStat(name);
+            const auto bus_stat_opt = handler.GetBusStat(name);
 
             if (!bus_stat_opt) {
                 arr.push_back(json::Dict{{"request_id"s, id}, {"error_message"s, "not found"s}});
@@ -172,7 +210,7 @@ void PrintOutput(const TransportCatalogue& catalogue, const json::Array& request
 
             arr.push_back(move(json_stat));
         } else if (type == "Stop"s) {
-            auto stop_buses = catalogue.GetBusesThroughStop(name);
+            auto stop_buses = handler.GetBusesThroughStop(name);
 
             if (!stop_buses) {
                 arr.push_back(json::Dict{{"request_id"s, id}, {"error_message"s, "not found"s}});
@@ -202,54 +240,8 @@ void PrintOutput(const TransportCatalogue& catalogue, const json::Array& request
     json::Print(json::Document(arr), out);
 }
 
-void BuildSvgMap(const TransportCatalogue& catalogue, const json::Dict& settings_dict, std::ostream& out) {
-    auto settings = DictToRenderSettings(settings_dict);
-
-    vector<geo::Coordinates> all_coords;
-
-    vector<const Bus*> buses;
-
-    auto comp = [] (const Stop* a, const Stop* b) {
-        return a->name < b->name;
-    };
-
-    set<const Stop*, decltype(comp)> stops(comp);
-
-    for (auto el : *catalogue.GetBusNames()) {
-                
-        buses.push_back(catalogue.GetBus(el));
-        
-        const auto& bus_stops = catalogue.GetBus(el)->bus_stops;
-
-        for (const auto stop : bus_stops) {
-            all_coords.push_back(stop->coordinates);
-            stops.insert(stop);
-        }
-    }
-
-    SphereProjector proj(all_coords.begin(), all_coords.end(), 
-        settings.width, 
-        settings.height, 
-        settings.padding);
-
-    all_coords.clear();
-
-    MapRenderer renderer(proj, settings);
-
-    vector<const Stop*> stops_vec(make_move_iterator(stops.begin()), 
-        make_move_iterator(stops.end()));
-
-    renderer.AddLinesToSvg(buses);
-    renderer.AddBusLabelsToSvg(buses);
-
-    buses.clear();
-
-    renderer.AddStopSymToSvg(stops_vec);
-    renderer.AddStopLabelsToSvg(stops_vec);
-
-    stops_vec.clear();
-
-    const svg::Document& svg_doc = renderer.GetSvgDoc();
+void BuildSvgMap(const RequestHandler& handler, std::ostream& out) {
+    const svg::Document& svg_doc = handler.RenderMap();
 
     svg_doc.Render(out);
 }
@@ -263,15 +255,21 @@ void ProcessJSON(TransportCatalogue& catalogue, std::istream& in, std::ostream& 
     Format out_format) {
 
     auto json = ReadJSON(in);
+    
     FillCatalogue(catalogue, GetBaseRequests(json));
+
+    auto settings = DictToRenderSettings(GetRenderSettings(json));
+
+    renderer::MapRenderer map_renderer = GetRenderer(catalogue, move(settings));
+
+    RequestHandler handler(catalogue, map_renderer);
 
     switch (out_format) {
         case Format::JSON:
-            PrintOutput(catalogue, GetStatRequests(json), out);
+            PrintOutput(handler, GetStatRequests(json), out);
             break;
         case Format::SVG:
-            BuildSvgMap(catalogue, GetRenderSettings(json), out);
-
+            BuildSvgMap(handler, out);
     }
 }
 

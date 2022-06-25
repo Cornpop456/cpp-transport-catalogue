@@ -4,6 +4,8 @@ using namespace std;
 
 namespace transport {
 
+namespace renderer {
+
 namespace map_objects {
 
 RouteLine::RouteLine(const Bus* bus, 
@@ -137,14 +139,19 @@ void StopLabels::Draw(svg::ObjectContainer& container) const {
 
 } // map_objects
 
-MapRenderer::MapRenderer(const SphereProjector& proj, const RenderSettings& settings) 
-    :  proj_(proj), settings_(settings) {
+MapRenderer::MapRenderer(SphereProjector proj, 
+        RenderSettings settings, 
+        vector<const Bus*> buses, 
+        vector<const Stop*> stops)
+
+    :  proj_(proj), settings_(settings), buses_(buses), stops_(stops) {
 }
 
-void MapRenderer::AddLinesToSvg(const vector<const Bus*>& buses) {
+void MapRenderer::AddLinesToSvg() {
     color_index_ = 0;
 
-    for (const auto bus : buses) {
+    for (const auto bus : buses_) {
+        
         if (bus->bus_stops.size() == 0) {
             continue;
         }
@@ -161,10 +168,10 @@ void MapRenderer::AddLinesToSvg(const vector<const Bus*>& buses) {
     }
 }
 
-void MapRenderer::AddBusLabelsToSvg(const std::vector<const Bus*>& buses) {
+void MapRenderer::AddBusLabelsToSvg() {
     color_index_ = 0;
 
-    for (const auto bus : buses) {
+    for (const auto bus : buses_) {
         if (bus->bus_stops.size() == 0) {
             continue;
         }
@@ -181,26 +188,26 @@ void MapRenderer::AddBusLabelsToSvg(const std::vector<const Bus*>& buses) {
     }
 }
 
-void MapRenderer::AddStopSymToSvg(const std::vector<const Stop*>& stops) {
-        if (stops.size() == 0) {
+void MapRenderer::AddStopSymToSvg() {
+        if (stops_.size() == 0) {
             return;
         }
 
         map_objects::StopSymbols syms{
-            stops, 
+            stops_, 
             proj_,
             settings_.stop_radius};
 
         syms.Draw(svg_doc_);
 }
 
-void MapRenderer::AddStopLabelsToSvg(const std::vector<const Stop*>& stops) {
-        if (stops.size() == 0) {
+void MapRenderer::AddStopLabelsToSvg() {
+        if (stops_.size() == 0) {
             return;
         }
 
         map_objects::StopLabels labels{
-            stops,
+            stops_,
             proj_,
             settings_
         };
@@ -208,8 +215,10 @@ void MapRenderer::AddStopLabelsToSvg(const std::vector<const Stop*>& stops) {
         labels.Draw(svg_doc_);
 }
 
-const svg::Document& MapRenderer::GetSvgDoc() {
+const svg::Document& MapRenderer::GetSvgDoc() const {
     return svg_doc_;
 }
+
+} // renderer
 
 } // transport
