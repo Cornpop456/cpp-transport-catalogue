@@ -1,3 +1,5 @@
+#include <sstream>
+
 #include "json.h"
 #include "json_reader.h"
 #include "request_handler.h"
@@ -179,6 +181,12 @@ void FillCatalogue(TransportCatalogue& catalogue, const json::Array& requests) {
     }
 }
 
+void BuildSvgMap(const RequestHandler& handler, std::ostream& out) {
+    const svg::Document& svg_doc = handler.RenderMap();
+
+    svg_doc.Render(out);
+}
+
 void PrintOutput(const RequestHandler& handler, const json::Array& requests, std::ostream& out) {
     json::Array arr;
     arr.reserve(requests.size());
@@ -188,10 +196,10 @@ void PrintOutput(const RequestHandler& handler, const json::Array& requests, std
         const auto& dict = item.AsMap();
 
         int id = dict.at("id"s).AsInt();
-        const string& name = dict.at("name"s).AsString();
         const string& type = dict.at("type"s).AsString();
 
         if (type == "Bus"s) {
+            const string& name = dict.at("name"s).AsString();
             const auto bus_stat_opt = handler.GetBusStat(name);
 
             if (!bus_stat_opt) {
@@ -210,6 +218,7 @@ void PrintOutput(const RequestHandler& handler, const json::Array& requests, std
 
             arr.push_back(move(json_stat));
         } else if (type == "Stop"s) {
+            const string& name = dict.at("name"s).AsString();
             auto stop_buses = handler.GetBusesThroughStop(name);
 
             if (!stop_buses) {
@@ -231,6 +240,18 @@ void PrintOutput(const RequestHandler& handler, const json::Array& requests, std
             json_stop_buses["buses"s] = move(buses);
 
             arr.push_back(move(json_stop_buses));
+        } else if (type == "Map"s) {
+            json::Dict json_stop_buses;
+            json_stop_buses["request_id"s] = json::Node{id};
+
+            stringstream map_string;
+
+            BuildSvgMap(handler, map_string);
+
+            json_stop_buses["map"s] = json::Node{map_string.str()};
+
+            arr.push_back(move(json_stop_buses));
+
         } else {
             throw invalid_argument("wrong query to catalogue"s);
         }
@@ -238,12 +259,6 @@ void PrintOutput(const RequestHandler& handler, const json::Array& requests, std
     }
 
     json::Print(json::Document(arr), out);
-}
-
-void BuildSvgMap(const RequestHandler& handler, std::ostream& out) {
-    const svg::Document& svg_doc = handler.RenderMap();
-
-    svg_doc.Render(out);
 }
 
 } // namespace
