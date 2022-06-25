@@ -8,6 +8,14 @@ int main() {
     using namespace transport;
     
     TransportCatalogue catalogue;
-    json_reader::ProcessJSON(catalogue, cin, cout, Format::JSON);
+    JsonReader reader(cin);
+
+    reader.FillCatalogue(catalogue);
+
+    renderer::MapRenderer renderer = reader.GetRenderer(catalogue);
+
+    RequestHandler handler(catalogue, renderer);
+
+    reader.PrintJsonResponse(handler, cout);
 }
 

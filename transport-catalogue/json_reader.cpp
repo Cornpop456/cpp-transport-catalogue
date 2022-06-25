@@ -1,32 +1,26 @@
-#include <sstream>
-
-#include "json.h"
 #include "json_reader.h"
-#include "request_handler.h"
 
 using namespace std;
 
 namespace transport {
 
-namespace {
+JsonReader::JsonReader(std::istream& input) : json_doc_(json::Load(input)) {
 
-json::Document ReadJSON(std::istream& input) {
-    return json::Load(input);
+};
+
+const json::Array& JsonReader::GetBaseRequests() const {
+    return json_doc_.GetRoot().AsMap().at("base_requests"s).AsArray();
 }
 
-const json::Array& GetBaseRequests(const json::Document& doc) {
-    return doc.GetRoot().AsMap().at("base_requests"s).AsArray();
+const json::Dict& JsonReader::GetRenderSettings() const {
+    return json_doc_.GetRoot().AsMap().at("render_settings"s).AsMap();
 }
 
-const json::Dict& GetRenderSettings(const json::Document& doc) {
-    return doc.GetRoot().AsMap().at("render_settings"s).AsMap();
+const json::Array& JsonReader::GetStatRequests() const {
+    return json_doc_.GetRoot().AsMap().at("stat_requests"s).AsArray();
 }
 
-const json::Array& GetStatRequests(const json::Document& doc) {
-    return doc.GetRoot().AsMap().at("stat_requests"s).AsArray();
-}
-
- svg::Color GetColorFromNode(const json::Node& n) {
+svg::Color JsonReader::GetColorFromNode(const json::Node& n) const {
     if (n.IsString()) {
         return n.AsString();
     } 
@@ -47,7 +41,7 @@ const json::Array& GetStatRequests(const json::Document& doc) {
         arr[3].AsDouble()};
 }
 
-renderer::RenderSettings DictToRenderSettings(const json::Dict& settings_dict) {
+renderer::RenderSettings JsonReader::DictToRenderSettings(const json::Dict& settings_dict) const {
     renderer::RenderSettings settings;
     
     settings.width = settings_dict.at("width"s).AsDouble();
@@ -77,9 +71,7 @@ renderer::RenderSettings DictToRenderSettings(const json::Dict& settings_dict) {
     return settings;
 }
 
-
-    
-parsed::Bus DictToBus(const json::Dict& bus_dict) {
+parsed::Bus JsonReader::DictToBus(const json::Dict& bus_dict) const {
     parsed::Bus bus;
 
     bus.name = move(const_cast<string&>(bus_dict.at("name"s).AsString()));
@@ -92,7 +84,7 @@ parsed::Bus DictToBus(const json::Dict& bus_dict) {
     return bus;
 }
 
-std::pair<parsed::Stop, parsed::Distances> DictToStopDists(const json::Dict& stop_dict) {
+std::pair<parsed::Stop, parsed::Distances> JsonReader::DictToStopDists(const json::Dict& stop_dict) const {
     parsed::Stop p_s;
     parsed::Distances p_d;
 
@@ -109,7 +101,7 @@ std::pair<parsed::Stop, parsed::Distances> DictToStopDists(const json::Dict& sto
     return {p_s, p_d};
 }
 
-renderer::MapRenderer GetRenderer(const TransportCatalogue& catalogue, renderer::RenderSettings settings) {
+renderer::MapRenderer JsonReader::GetRenderer(const TransportCatalogue& catalogue) const {
     vector<geo::Coordinates> all_coords;
 
     vector<const Bus*> buses;
@@ -132,6 +124,8 @@ renderer::MapRenderer GetRenderer(const TransportCatalogue& catalogue, renderer:
         }
     }
 
+    renderer::RenderSettings settings = DictToRenderSettings(GetRenderSettings());
+
     SphereProjector proj(all_coords.begin(), all_coords.end(), 
         settings.width, 
         settings.height, 
@@ -147,9 +141,14 @@ renderer::MapRenderer GetRenderer(const TransportCatalogue& catalogue, renderer:
     return map_renderer;
 }
 
-void FillCatalogue(TransportCatalogue& catalogue, const json::Array& requests) {
+
+// Оставил наполенние каталога в JsonReader потому что иначе пришлось бы переносить всю логику разбора json запросов
+// в RequestHandler, а он этим по идее не должен заниматься
+void JsonReader::FillCatalogue(TransportCatalogue& catalogue) const {
     vector<parsed::Bus> add_bus_deferred;
     vector<parsed::Distances> add_dists_deferred;
+
+    const json::Array& requests = GetBaseRequests();
 
     for (const auto& item : requests) {
 
@@ -181,113 +180,14 @@ void FillCatalogue(TransportCatalogue& catalogue, const json::Array& requests) {
     }
 }
 
-void BuildSvgMap(const RequestHandler& handler, std::ostream& out) {
-    const svg::Document& svg_doc = handler.RenderMap();
 
-    svg_doc.Render(out);
+// перенёс логику формирования json массива в RequestHandler, так как если бы он  выдавал не json, а свои структуры,
+// то пришлось бы ещё раз проверять тип возвращённого значения, для формирования нужного элемента json массива
+// в этой функции, а это вызвыло бы дублирование кода
+void JsonReader::PrintJsonResponse(const RequestHandler& handler, std::ostream& out) const {
+    const json::Array& requests = GetStatRequests();
+
+    json::Print(handler.GetJsonResponse(requests), out);
 }
-
-void PrintOutput(const RequestHandler& handler, const json::Array& requests, std::ostream& out) {
-    json::Array arr;
-    arr.reserve(requests.size());
-    
-    for (const auto& item : requests) {
-
-        const auto& dict = item.AsMap();
-
-        int id = dict.at("id"s).AsInt();
-        const string& type = dict.at("type"s).AsString();
-
-        if (type == "Bus"s) {
-            const string& name = dict.at("name"s).AsString();
-            const auto bus_stat_opt = handler.GetBusStat(name);
-
-            if (!bus_stat_opt) {
-                arr.push_back(json::Dict{{"request_id"s, id}, {"error_message"s, "not found"s}});
-
-                continue;
-            }
-
-            const auto& bus_stat = bus_stat_opt.value();
-            json::Dict json_stat;
-            json_stat["request_id"s] = json::Node{id};
-            json_stat["route_length"s] = json::Node{static_cast<int>(bus_stat.length)};
-            json_stat["curvature"s] = json::Node{bus_stat.curvature};
-            json_stat["stop_count"s] = json::Node{bus_stat.all_stops};
-            json_stat["unique_stop_count"s] = json::Node{bus_stat.unique_stops};
-
-            arr.push_back(move(json_stat));
-        } else if (type == "Stop"s) {
-            const string& name = dict.at("name"s).AsString();
-            auto stop_buses = handler.GetBusesThroughStop(name);
-
-            if (!stop_buses) {
-                arr.push_back(json::Dict{{"request_id"s, id}, {"error_message"s, "not found"s}});
-
-                continue;
-            }
-
-            json::Dict json_stop_buses;
-            json_stop_buses["request_id"s] = json::Node{id};
-
-            json::Array buses;
-            buses.reserve(stop_buses->size());
-
-            for (string_view bus: *stop_buses) {
-                buses.push_back(json::Node{string(bus)});
-            }
-
-            json_stop_buses["buses"s] = move(buses);
-
-            arr.push_back(move(json_stop_buses));
-        } else if (type == "Map"s) {
-            json::Dict json_svg_map;
-            json_svg_map["request_id"s] = json::Node{id};
-
-            stringstream map_string;
-
-            BuildSvgMap(handler, map_string);
-
-            json_svg_map["map"s] = json::Node{map_string.str()};
-
-            arr.push_back(move(json_svg_map));
-
-        } else {
-            throw invalid_argument("wrong query to catalogue"s);
-        }
-
-    }
-
-    json::Print(json::Document(arr), out);
-}
-
-} // namespace
-
-
-namespace json_reader {
-
-void ProcessJSON(TransportCatalogue& catalogue, std::istream& in, std::ostream& out,
-    Format out_format) {
-
-    auto json = ReadJSON(in);
-    
-    FillCatalogue(catalogue, GetBaseRequests(json));
-
-    auto settings = DictToRenderSettings(GetRenderSettings(json));
-
-    renderer::MapRenderer map_renderer = GetRenderer(catalogue, move(settings));
-
-    RequestHandler handler(catalogue, map_renderer);
-
-    switch (out_format) {
-        case Format::JSON:
-            PrintOutput(handler, GetStatRequests(json), out);
-            break;
-        case Format::SVG:
-            BuildSvgMap(handler, out);
-    }
-}
-
-} // json_reader
 
 } // transport

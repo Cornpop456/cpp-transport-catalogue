@@ -1,5 +1,6 @@
 #pragma once
 
+#include "json.h"
 #include "map_renderer.h"
 #include "transport_catalogue.h"
 
@@ -14,6 +15,8 @@ public:
     const std::set<std::string_view>* GetBusesThroughStop(const std::string& stop_name) const;
 
     const svg::Document& RenderMap() const;
+
+    json::Document GetJsonResponse(const json::Array& requests) const;
 
 private:
     const TransportCatalogue& db_;
