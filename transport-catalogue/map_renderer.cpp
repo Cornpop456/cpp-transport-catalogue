@@ -72,7 +72,7 @@ void BusLabel::Draw(svg::ObjectContainer& container) const {
     container.Add(under);
     container.Add(actual);
 
-    if (!bus_->circular&& bus_->bus_stops.front() != bus_->bus_stops.back()) {
+    if (!bus_->circular && bus_->bus_stops.front() != bus_->bus_stops.back()) {
         under.SetPosition(proj_(bus_->bus_stops.back()->coordinates));
         actual.SetPosition(proj_(bus_->bus_stops.back()->coordinates));
 
