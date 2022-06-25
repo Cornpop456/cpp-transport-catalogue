@@ -207,13 +207,24 @@ void BuildSvgMap(const TransportCatalogue& catalogue, const json::Dict& settings
 
     vector<geo::Coordinates> all_coords;
 
+    vector<const Bus*> buses;
+
+    auto comp = [] (const Stop* a, const Stop* b) {
+        return a->name < b->name;
+    };
+
+    set<const Stop*, decltype(comp)> stops(comp);
+
     for (auto el : *catalogue.GetBusNames()) {
+                
+        buses.push_back(catalogue.GetBus(el));
+        
         const auto& bus_stops = catalogue.GetBus(el)->bus_stops;
 
         for (const auto stop : bus_stops) {
             all_coords.push_back(stop->coordinates);
+            stops.insert(stop);
         }
-
     }
 
     SphereProjector proj(all_coords.begin(), all_coords.end(), 
@@ -225,9 +236,18 @@ void BuildSvgMap(const TransportCatalogue& catalogue, const json::Dict& settings
 
     MapRenderer renderer(proj, settings);
 
-    for (auto el : *catalogue.GetBusNames()) {
-        renderer.AddBusToSvg(catalogue.GetBus(el));
-    }
+    vector<const Stop*> stops_vec(make_move_iterator(stops.begin()), 
+        make_move_iterator(stops.end()));
+
+    renderer.AddLinesToSvg(buses);
+    renderer.AddBusLabelsToSvg(buses);
+
+    buses.clear();
+
+    renderer.AddStopSymToSvg(stops_vec);
+    renderer.AddStopLabelsToSvg(stops_vec);
+
+    stops_vec.clear();
 
     const svg::Document& svg_doc = renderer.GetSvgDoc();
 

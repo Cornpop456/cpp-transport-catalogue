@@ -104,15 +104,23 @@ private:
     const SphereProjector& proj_;
     const RenderSettings& settings_;
     svg::Document svg_doc_;
-    int bus_index_ = 0;
+    int color_index_ = 0;
 
 public:
     MapRenderer(const SphereProjector& proj, const RenderSettings& settings);
 
-    void AddBusToSvg(const Bus* bus);
+    void AddLinesToSvg(const std::vector<const Bus*>& buses);
+    
+    void AddBusLabelsToSvg(const std::vector<const Bus*>& buses);
+
+    void AddStopSymToSvg(const std::vector<const Stop*>& stops);
+
+    void AddStopLabelsToSvg(const std::vector<const Stop*>& stops);
 
     const svg::Document& GetSvgDoc();
 };
+
+namespace map_objects {
 
 class RouteLine : public svg::Drawable {
 public:
@@ -129,5 +137,52 @@ private:
     svg::Color color_;
     double stroke_width_;
 };
+
+class BusLabel : public svg::Drawable {
+public:
+    BusLabel(const Bus* bus,
+        const SphereProjector& proj,  
+        const RenderSettings& settings,
+        int color_idx);
+
+    void Draw(svg::ObjectContainer& container) const override;
+
+private:
+    const Bus* bus_;
+    const SphereProjector& proj_;
+    const RenderSettings& settings_;
+    int color_idx_;
+};
+
+class StopSymbols : public svg::Drawable {
+public:
+    StopSymbols(const std::vector<const Stop*>& stops,
+        const SphereProjector& proj,  
+        double stop_radius);
+
+    void Draw(svg::ObjectContainer& container) const override;
+
+private:
+    const std::vector<const Stop*>& stops_;
+    const SphereProjector& proj_;
+    double stop_radius_;
+};
+
+class StopLabels : public svg::Drawable {
+public:
+    StopLabels(const std::vector<const Stop*>& stops,
+        const SphereProjector& proj,  
+        const RenderSettings& settings);
+
+    void Draw(svg::ObjectContainer& container) const override;
+
+private:
+    const std::vector<const Stop*>& stops_;
+    const SphereProjector& proj_;
+    const RenderSettings& settings_;
+};
+
+} // map_objects
+
 
 } // transport

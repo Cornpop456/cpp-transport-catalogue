@@ -4,6 +4,8 @@ using namespace std;
 
 namespace transport {
 
+namespace map_objects {
+
 RouteLine::RouteLine(const Bus* bus, 
     const SphereProjector& proj, 
     svg::Color color, 
@@ -24,8 +26,8 @@ void RouteLine::Draw(svg::ObjectContainer& container) const {
         for (int i = bus_->bus_stops.size() - 2; i >= 0; --i) {
             pol.AddPoint(proj_(bus_->bus_stops[i]->coordinates));
         }
-    }
-
+    } 
+    
     pol.SetFillColor(svg::NoneColor)
        .SetStrokeColor(color_)
        .SetStrokeWidth(stroke_width_)
@@ -35,24 +37,175 @@ void RouteLine::Draw(svg::ObjectContainer& container) const {
     container.Add(pol);
 }
 
-MapRenderer::MapRenderer(const SphereProjector& proj, const RenderSettings& settings) 
-    :  proj_(proj), settings_(settings) {
+BusLabel::BusLabel(const Bus* bus,
+    const SphereProjector& proj,  
+    const RenderSettings& settings,
+    int color_idx) 
+    
+    : bus_(bus), proj_(proj), settings_(settings), color_idx_(color_idx) {
 
 }
 
-void MapRenderer::AddBusToSvg(const Bus* bus) {
-    if (bus->bus_stops.size() == 0) {
-        return;
+void BusLabel::Draw(svg::ObjectContainer& container) const {
+    svg::Text base;
+    
+    base.SetPosition(proj_(bus_->bus_stops.front()->coordinates))
+        .SetOffset(settings_.bus_label_offset)
+        .SetFontSize(settings_.bus_label_font_size)
+        .SetFontFamily("Verdana"s)
+        .SetFontWeight("bold"s)
+        .SetData(bus_->name);
+    
+    svg::Text under = base;
+    svg::Text actual = move(base);
+       
+    under.SetFillColor(settings_.underlayer_color)
+            .SetStrokeColor(settings_.underlayer_color)
+            .SetStrokeWidth(settings_.underlayer_width)
+            .SetStrokeLineCap(svg::StrokeLineCap::ROUND)
+            .SetStrokeLineJoin(svg::StrokeLineJoin::ROUND);
+
+    actual.SetFillColor(settings_.color_palette[color_idx_ % settings_.color_palette.size()]);
+
+    container.Add(under);
+    container.Add(actual);
+
+    if (!bus_->circular&& bus_->bus_stops.front() != bus_->bus_stops.back()) {
+        under.SetPosition(proj_(bus_->bus_stops.back()->coordinates));
+        actual.SetPosition(proj_(bus_->bus_stops.back()->coordinates));
+
+        container.Add(under);
+        container.Add(actual);
     }
+}
 
-    RouteLine line{bus, 
-        proj_,
-        settings_.color_palette[bus_index_ % settings_.color_palette.size()], 
-        settings_.line_width};
+StopSymbols::StopSymbols(const std::vector<const Stop*>& stops,
+        const SphereProjector& proj,  
+        
+        double stop_radius) : stops_(stops), proj_(proj), stop_radius_(stop_radius) {
+}
 
-    line.Draw(svg_doc_);
+void StopSymbols::Draw(svg::ObjectContainer& container) const {
+    for (const auto stop : stops_) {
+        svg::Circle sym;
 
-    ++bus_index_;
+        sym.SetCenter(proj_(stop->coordinates))
+           .SetRadius(stop_radius_)
+           .SetFillColor("white"s);
+
+        container.Add(sym);
+    }
+}
+
+StopLabels::StopLabels(const std::vector<const Stop*>& stops,
+        const SphereProjector& proj,  
+        const RenderSettings& settings)
+
+        : stops_(stops), proj_(proj), settings_(settings) {
+
+}
+
+void StopLabels::Draw(svg::ObjectContainer& container) const {
+    svg::Text base;
+
+    base.SetOffset(settings_.stop_label_offset)
+        .SetFontSize(settings_.stop_label_font_size)
+        .SetFontFamily("Verdana"s);
+    
+    svg::Text under = base;
+    svg::Text actual = move(base);
+    
+    under.SetFillColor(settings_.underlayer_color)
+         .SetStrokeColor(settings_.underlayer_color)
+         .SetStrokeWidth(settings_.underlayer_width)
+         .SetStrokeLineCap(svg::StrokeLineCap::ROUND)
+         .SetStrokeLineJoin(svg::StrokeLineJoin::ROUND);
+
+    actual.SetFillColor("black"s);
+         
+    for (const auto stop : stops_) {
+        under.SetPosition(proj_(stop->coordinates))
+             .SetData(stop->name);
+
+        actual.SetPosition(proj_(stop->coordinates))
+              .SetData(stop->name);
+
+        container.Add(under);
+        container.Add(actual);
+    }
+}
+
+} // map_objects
+
+MapRenderer::MapRenderer(const SphereProjector& proj, const RenderSettings& settings) 
+    :  proj_(proj), settings_(settings) {
+}
+
+void MapRenderer::AddLinesToSvg(const vector<const Bus*>& buses) {
+    color_index_ = 0;
+
+    for (const auto bus : buses) {
+        if (bus->bus_stops.size() == 0) {
+            continue;
+        }
+
+        map_objects::RouteLine line{
+            bus, 
+            proj_,
+            settings_.color_palette[color_index_ % settings_.color_palette.size()], 
+            settings_.line_width};
+
+        line.Draw(svg_doc_);
+
+        ++color_index_;
+    }
+}
+
+void MapRenderer::AddBusLabelsToSvg(const std::vector<const Bus*>& buses) {
+    color_index_ = 0;
+
+    for (const auto bus : buses) {
+        if (bus->bus_stops.size() == 0) {
+            continue;
+        }
+
+        map_objects::BusLabel label{
+            bus, 
+            proj_,
+            settings_,
+            color_index_};
+
+        label.Draw(svg_doc_);
+
+        ++color_index_;
+    }
+}
+
+void MapRenderer::AddStopSymToSvg(const std::vector<const Stop*>& stops) {
+        if (stops.size() == 0) {
+            return;
+        }
+
+        map_objects::StopSymbols syms{
+            stops, 
+            proj_,
+            settings_.stop_radius};
+
+        syms.Draw(svg_doc_);
+}
+
+void MapRenderer::AddStopLabelsToSvg(const std::vector<const Stop*>& stops) {
+        if (stops.size() == 0) {
+            return;
+        }
+
+        map_objects::StopLabels labels{
+            stops,
+            proj_,
+            settings_
+        };
+
+        labels.Draw(svg_doc_);
 }
 
 const svg::Document& MapRenderer::GetSvgDoc() {
