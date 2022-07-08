@@ -37,12 +37,13 @@ const svg::Document& RequestHandler::RenderMap() const {
 }
 
 json::Document RequestHandler::GetJsonResponse(const json::Array& requests) const {
-    json::Array arr;
-    arr.reserve(requests.size());
-
+    auto response_builder = json::Builder{};
+    
+    auto arr_ctx = response_builder.StartArray();
+    
     for (const auto& item : requests) {
 
-        const auto& dict = item.AsMap();
+        const auto& dict = item.AsDict();
 
         int id = dict.at("id"s).AsInt();
         const string& type = dict.at("type"s).AsString();
@@ -51,64 +52,73 @@ json::Document RequestHandler::GetJsonResponse(const json::Array& requests) cons
             const string& name = dict.at("name"s).AsString();
             const auto bus_stat_opt = GetBusStat(name);
 
-            if (!bus_stat_opt) {
-                arr.push_back(json::Dict{{"request_id"s, id}, {"error_message"s, "not found"s}});
-
+            if (!bus_stat_opt) {     
+                arr_ctx.StartDict()
+                    .Key("request_id"s)
+                    .Value(id)
+                    .Key("error_message"s)
+                    .Value("not found"s)
+                    .EndDict();
                 continue;
             }
 
             const auto& bus_stat = bus_stat_opt.value();
-            json::Dict json_stat;
-            json_stat["request_id"s] = json::Node{id};
-            json_stat["route_length"s] = json::Node{static_cast<int>(bus_stat.length)};
-            json_stat["curvature"s] = json::Node{bus_stat.curvature};
-            json_stat["stop_count"s] = json::Node{bus_stat.all_stops};
-            json_stat["unique_stop_count"s] = json::Node{bus_stat.unique_stops};
 
-            arr.push_back(move(json_stat));
+            arr_ctx.StartDict()
+                .Key("request_id"s)
+                .Value(id)
+                .Key("curvature"s)
+                .Value(bus_stat.curvature)
+                .Key("stop_count"s)
+                .Value(bus_stat.all_stops)
+                .Key("unique_stop_count"s)
+                .Value(bus_stat.unique_stops)
+                .Key("route_length"s)
+                .Value(static_cast<int>(bus_stat.length))
+                .EndDict();
         } else if (type == "Stop"s) {
             const string& name = dict.at("name"s).AsString();
             auto stop_buses = GetBusesThroughStop(name);
 
             if (!stop_buses) {
-                arr.push_back(json::Dict{{"request_id"s, id}, {"error_message"s, "not found"s}});
-
+                arr_ctx.StartDict()
+                    .Key("request_id"s)
+                    .Value(id)
+                    .Key("error_message"s)
+                    .Value("not found"s)
+                    .EndDict();
                 continue;
             }
-
-            json::Dict json_stop_buses;
-            json_stop_buses["request_id"s] = json::Node{id};
-
-            json::Array buses;
-            buses.reserve(stop_buses->size());
+            
+            arr_ctx.StartDict()
+                .Key("request_id"s)
+                .Value(id)
+                .Key("buses"s)
+                .StartArray();
 
             for (string_view bus: *stop_buses) {
-                buses.push_back(json::Node{string(bus)});
+                arr_ctx.Value(string(bus));
             }
-
-            json_stop_buses["buses"s] = move(buses);
-
-            arr.push_back(move(json_stop_buses));
+            
+            arr_ctx.EndArray().EndDict();        
         } else if (type == "Map"s) {
-            json::Dict json_svg_map;
-            json_svg_map["request_id"s] = json::Node{id};
-
             stringstream map_string;
 
             const auto& svg_doc = RenderMap();
             svg_doc.Render(map_string);
-
-            json_svg_map["map"s] = json::Node{map_string.str()};
-
-            arr.push_back(move(json_svg_map));
-
+                 
+            arr_ctx.StartDict()
+                .Key("request_id"s)
+                .Value(id)
+                .Key("map"s)
+                .Value(map_string.str())
+                .EndDict();
         } else {
             throw invalid_argument("wrong query to catalogue"s);
         }
-
     }
 
-    return json::Document(arr);
+    return json::Document(arr_ctx.EndArray().Build());
 }
 
 } // transport

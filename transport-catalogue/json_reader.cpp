@@ -6,18 +6,18 @@ namespace transport {
 
 JsonReader::JsonReader(std::istream& input) : json_doc_(json::Load(input)) {
 
-};
+}
 
 const json::Array& JsonReader::GetBaseRequests() const {
-    return json_doc_.GetRoot().AsMap().at("base_requests"s).AsArray();
+    return json_doc_.GetRoot().AsDict().at("base_requests"s).AsArray();
 }
 
 const json::Dict& JsonReader::GetRenderSettings() const {
-    return json_doc_.GetRoot().AsMap().at("render_settings"s).AsMap();
+    return json_doc_.GetRoot().AsDict().at("render_settings"s).AsDict();
 }
 
 const json::Array& JsonReader::GetStatRequests() const {
-    return json_doc_.GetRoot().AsMap().at("stat_requests"s).AsArray();
+    return json_doc_.GetRoot().AsDict().at("stat_requests"s).AsArray();
 }
 
 svg::Color JsonReader::GetColorFromNode(const json::Node& n) const {
@@ -94,7 +94,7 @@ std::pair<parsed::Stop, parsed::Distances> JsonReader::DictToStopDists(const jso
     p_s.lat = stop_dict.at("latitude"s).AsDouble();
     p_s.lng = stop_dict.at("longitude"s).AsDouble();
 
-    for (const auto& [to, dist]: stop_dict.at("road_distances"s).AsMap()) {
+    for (const auto& [to, dist]: stop_dict.at("road_distances"s).AsDict()) {
         p_d.d_map.emplace(move(const_cast<string&>(to)), dist.AsInt());
     }
 
@@ -152,7 +152,7 @@ void JsonReader::FillCatalogue(TransportCatalogue& catalogue) const {
 
     for (const auto& item : requests) {
 
-        const auto& dict = item.AsMap();
+        const auto& dict = item.AsDict();
         
         const string& type = dict.at("type"s).AsString();
 
