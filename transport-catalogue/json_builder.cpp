@@ -125,7 +125,7 @@ KeyItemContext Builder::Key(string key) {
     return KeyItemContext(this);
 }
 
-Builder& Builder::Value(Node::Value val) {
+Builder& Builder::Value(JsonValue val) {
     if (ready_) {
         throw logic_error("ready object"s);
     }
@@ -196,13 +196,13 @@ Builder& ItemContext::EndArray() {
     return builder_->EndArray();
 }
 
-DictItemContext KeyItemContext::Value(Node::Value val) {
+DictItemContext KeyItemContext::Value(JsonValue val) {
     builder_->Value(std::move(val));
     return DictItemContext{builder_};
  
 }
     
-ArrayItemContext ArrayItemContext::Value(Node::Value val) {
+ArrayItemContext ArrayItemContext::Value(JsonValue val) {
     builder_->Value(std::move(val));
     return ArrayItemContext{builder_};
 }

@@ -25,7 +25,7 @@ public:
     ArrayItemContext  StartArray();
     KeyItemContext  Key(std::string);
 
-    Builder& Value(Node::Value);
+    Builder& Value(JsonValue);
     Builder& EndDict();
     Builder& EndArray();
 
@@ -55,7 +55,7 @@ public:
 class ArrayItemContext : public ItemContext {
 public:
     using ItemContext::ItemContext;
-    ArrayItemContext Value(Node::Value);
+    ArrayItemContext Value(JsonValue);
     using ItemContext::StartDict;
     using ItemContext::StartArray;
     using ItemContext::EndArray;
@@ -64,7 +64,7 @@ public:
 class KeyItemContext : public ItemContext {
 public:
     using ItemContext::ItemContext;
-    DictItemContext Value(Node::Value);
+    DictItemContext Value(JsonValue);
     using ItemContext::StartDict;
     using ItemContext::StartArray;
 };
