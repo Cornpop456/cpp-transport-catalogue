@@ -17,6 +17,8 @@ private:
         std::hash<double> d_hasher_;
     };
     
+
+    int stop_id_ = 0;
     std::deque<Stop> stops_;
     std::unordered_map<std::string_view, Stop*> stopname_to_stop_;
     
@@ -36,6 +38,9 @@ public:
     
     bool FindStop(const std::string& name) const;
     bool FindBus(const std::string& name) const;
+
+    int GetStopsSize() const;
+    int GetStopId(const std::string_view& name) const;
 
     const std::set<std::string_view>* GetBusNames() const;
     const Bus* GetBus(std::string_view name) const;

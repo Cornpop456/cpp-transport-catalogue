@@ -6,6 +6,7 @@
 #include "transport_catalogue.h"
 #include "json.h"
 #include "request_handler.h"
+#include "transport_router.h"
 
 namespace transport {
 
@@ -31,6 +32,8 @@ public:
     JsonReader(std::istream& input);
 
     renderer::MapRenderer GetRenderer(const TransportCatalogue& catalogue) const;
+
+    route::RouteSettings GetRouteSettings() const;
 
     void FillCatalogue(TransportCatalogue& catalogue) const;
 

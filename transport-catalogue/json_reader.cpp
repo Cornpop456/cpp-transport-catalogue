@@ -20,6 +20,12 @@ const json::Array& JsonReader::GetStatRequests() const {
     return json_doc_.GetRoot().AsDict().at("stat_requests"s).AsArray();
 }
 
+route::RouteSettings JsonReader::GetRouteSettings() const {
+    const json::Dict& settings =  json_doc_.GetRoot().AsDict().at("routing_settings"s).AsDict();
+
+    return {settings.at("bus_wait_time").AsInt(), settings.at("bus_velocity").AsInt()};
+}
+
 svg::Color JsonReader::GetColorFromNode(const json::Node& n) const {
     if (n.IsString()) {
         return n.AsString();

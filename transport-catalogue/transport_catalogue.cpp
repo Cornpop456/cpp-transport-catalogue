@@ -4,8 +4,16 @@ using namespace std;
 
 namespace transport {
 
+int TransportCatalogue::GetStopsSize() const {
+    return stopname_to_stop_.size();
+}
+
+int TransportCatalogue::GetStopId(const std::string_view& name) const {
+    return stopname_to_stop_.at(name)->id;
+}
+
 void TransportCatalogue::AddStop(const parsed::Stop& stop) {
-    Stop s = Stop{stop.name, geo::Coordinates{stop.lat, stop.lng}, set<string_view>{}};
+    Stop s = Stop{stop.name, geo::Coordinates{stop.lat, stop.lng}, set<string_view>{}, stop_id_++};
     
     stops_.push_back(move(s));
 

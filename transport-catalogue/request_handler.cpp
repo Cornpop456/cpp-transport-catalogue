@@ -12,10 +12,65 @@
 
 using namespace std;
 
+namespace {
+
+json::Node GetNodeStop(const route::RouteData& data) {
+    json::Node node_stop{ json::Builder{}.StartDict()
+        .Key("stop_name"s).Value(std::string(data.stop_name))
+        .Key("time"s).Value(data.bus_wait_time)
+        .Key("type"s).Value("Wait"s)
+        .EndDict().Build() };
+        
+    return node_stop;
+}
+
+json::Node GetNodeBus(const route::RouteData& data) {
+    json::Node node_route{ json::Builder{}.StartDict()
+        .Key("bus"s).Value(std::string(data.bus_name))
+        .Key("span_count"s).Value(data.span_count)
+        .Key("time"s).Value(data.motion_time)
+        .Key("type"s).Value("Bus"s)
+        .EndDict().Build() };
+    return node_route;
+}
+
+json::Node GetNodeRoute(const std::vector<route::RouteData>& route_data) {
+    json::Node data_route{ json::Builder{}.StartArray().EndArray().Build() };
+    for (const route::RouteData& data : route_data) {
+        if (data.type == "bus"sv) {
+            const_cast<json::Array&>(data_route.AsArray()).push_back(std::move(GetNodeBus(data)));
+        }
+        else if (data.type == "stop"sv) {
+            const_cast<json::Array&>(data_route.AsArray()).push_back(std::move(GetNodeStop(data)));
+        }
+        else if (data.type == "stay_here"sv) {
+            return data_route;
+        }
+    }
+    return data_route;
+}
+
+double GetTotalTime(const std::vector<route::RouteData>& route_data) {
+    double total_time = 0.0;
+    for (const route::RouteData& data : route_data) {
+        if (data.type == "bus"sv) {
+            total_time += data.motion_time;
+        }
+        else if (data.type == "stop"sv) {
+            total_time += data.bus_wait_time;
+        }
+    }
+    return total_time;
+}
+
+}
+
 namespace transport {
 
- RequestHandler::RequestHandler(const TransportCatalogue& db, renderer::MapRenderer& renderer) 
-    : db_(db), renderer_(renderer) {
+ RequestHandler::RequestHandler(const TransportCatalogue& db, 
+    const route::TransportRouter& router, 
+    renderer::MapRenderer& renderer) 
+    : db_(db), router_(router), renderer_(renderer) {
 
 }
 
@@ -113,6 +168,28 @@ json::Document RequestHandler::GetJsonResponse(const json::Array& requests) cons
                 .Key("map"s)
                 .Value(map_string.str())
                 .EndDict();
+        } else if (type == "Route"s) {
+            auto route_data = router_.GetRoute(dict.at("from"s).AsString(), dict.at("to"s).AsString());
+
+            if (!route_data) {
+                arr_ctx.StartDict()
+                    .Key("request_id"s)
+                    .Value(id)
+                    .Key("error_message"s)
+                    .Value("not found"s)
+                    .EndDict();
+                continue;
+            }
+
+            arr_ctx.StartDict()
+                .Key("items"s)
+                .Value(GetNodeRoute(route_data.value()).AsArray())
+                .Key("request_id"s)
+                .Value(id)
+                .Key("total_time")
+                .Value(GetTotalTime(route_data.value()))
+                .EndDict();
+            
         } else {
             throw invalid_argument("wrong query to catalogue"s);
         }
