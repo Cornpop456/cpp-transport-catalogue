@@ -26,6 +26,10 @@ route::RouteSettings JsonReader::GetRouteSettings() const {
     return {settings.at("bus_wait_time").AsInt(), settings.at("bus_velocity").AsInt()};
 }
 
+serialize::Settings JsonReader::GetSerializeSettings() const {
+    return {json_doc_.GetRoot().AsDict().at("serialization_settings"s).AsDict().at("file").AsString()};
+}
+
 svg::Color JsonReader::GetColorFromNode(const json::Node& n) const {
     if (n.IsString()) {
         return n.AsString();

@@ -6,6 +6,7 @@
 #include "transport_catalogue.h"
 #include "json.h"
 #include "request_handler.h"
+#include "serialization.h"
 #include "transport_router.h"
 
 namespace transport {
@@ -34,6 +35,8 @@ public:
     renderer::MapRenderer GetRenderer(const TransportCatalogue& catalogue) const;
 
     route::RouteSettings GetRouteSettings() const;
+
+    serialize::Settings GetSerializeSettings() const;
 
     void FillCatalogue(TransportCatalogue& catalogue) const;
 

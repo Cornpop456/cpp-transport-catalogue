@@ -1,7 +1,10 @@
 #pragma once
 
+#include <memory>
+
 #include "json_builder.h"
 #include "map_renderer.h"
+#include "serialization.h"
 #include "transport_catalogue.h"
 #include "transport_router.h"
 
@@ -9,7 +12,7 @@ namespace transport {
 
 class RequestHandler {
 public:
-    RequestHandler(const TransportCatalogue& db, const route::TransportRouter& router, renderer::MapRenderer& renderer);
+    RequestHandler(const TransportCatalogue& db);
 
     std::optional<BusStat> GetBusStat(const std::string& bus_name) const;
 
@@ -19,11 +22,16 @@ public:
 
     json::Document GetJsonResponse(const json::Array& requests) const;
 
+    void SetTransportRouter(std::unique_ptr<route::TransportRouter>&& router);
+    void SetRenderer(std::unique_ptr<renderer::MapRenderer>&& renderer);
+
+    void Serialize(serialize::Settings settings);
+
 private:
     const TransportCatalogue& db_;
-    const route::TransportRouter& router_;
-    renderer::MapRenderer& renderer_;
 
+    std::unique_ptr<route::TransportRouter> router_;
+    std::unique_ptr<renderer::MapRenderer> renderer_;
 };
 
 

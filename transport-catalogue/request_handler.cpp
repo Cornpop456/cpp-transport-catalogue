@@ -67,11 +67,15 @@ double GetTotalTime(const std::vector<route::RouteData>& route_data) {
 
 namespace transport {
 
- RequestHandler::RequestHandler(const TransportCatalogue& db, 
-    const route::TransportRouter& router, 
-    renderer::MapRenderer& renderer) 
-    : db_(db), router_(router), renderer_(renderer) {
+ RequestHandler::RequestHandler(const TransportCatalogue& db) : db_(db){
+}
 
+void RequestHandler::SetTransportRouter(unique_ptr<route::TransportRouter>&& router) {
+    router_ = move(router);
+}
+
+void RequestHandler::SetRenderer(unique_ptr<renderer::MapRenderer>&& renderer) {
+    renderer_ = move(renderer);
 }
 
 optional<BusStat> RequestHandler::GetBusStat(const string& bus_name) const {
@@ -83,12 +87,12 @@ const set<string_view>* RequestHandler::GetBusesThroughStop(const string& stop_n
 }
 
 const svg::Document& RequestHandler::RenderMap() const {
-    renderer_.AddLinesToSvg();
-    renderer_.AddBusLabelsToSvg();
-    renderer_.AddStopSymToSvg();
-    renderer_.AddStopLabelsToSvg();
+    renderer_->AddLinesToSvg();
+    renderer_->AddBusLabelsToSvg();
+    renderer_->AddStopSymToSvg();
+    renderer_->AddStopLabelsToSvg();
 
-    return renderer_.GetSvgDoc();
+    return renderer_->GetSvgDoc();
 }
 
 json::Document RequestHandler::GetJsonResponse(const json::Array& requests) const {
@@ -169,7 +173,7 @@ json::Document RequestHandler::GetJsonResponse(const json::Array& requests) cons
                 .Value(map_string.str())
                 .EndDict();
         } else if (type == "Route"s) {
-            auto route_data = router_.GetRoute(dict.at("from"s).AsString(), dict.at("to"s).AsString());
+            auto route_data = router_->GetRoute(dict.at("from"s).AsString(), dict.at("to"s).AsString());
 
             if (!route_data) {
                 arr_ctx.StartDict()
@@ -196,6 +200,10 @@ json::Document RequestHandler::GetJsonResponse(const json::Array& requests) cons
     }
 
     return json::Document(arr_ctx.EndArray().Build());
+}
+
+void RequestHandler::Serialize(serialize::Settings settings) {
+    serialize::Serializator serializator(settings);
 }
 
 } // transport
