@@ -42,6 +42,10 @@ public:
     int GetStopsSize() const;
     int GetStopId(const std::string_view& name) const;
 
+    const std::unordered_map<std::string_view, Stop*> GetStops() const;
+    const std::unordered_map<std::string_view, Bus*> GetBuses() const;
+    const std::unordered_map<std::pair<Stop*, Stop*>, int, DistanceHasher> GetDistances() const;
+
     const std::set<std::string_view>* GetBusNames() const;
     const Bus* GetBus(std::string_view name) const;
     std::set<std::string_view>* GetBusesThroughStop(const std::string& name) const;

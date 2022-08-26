@@ -204,6 +204,16 @@ json::Document RequestHandler::GetJsonResponse(const json::Array& requests) cons
 
 void RequestHandler::Serialize(serialize::Settings settings) {
     serialize::Serializator serializator(settings);
+
+    serializator.SaveTransportCatalogue(db_);
+
+    serializator.Serialize();
+}
+
+void RequestHandler::Deserialize(serialize::Settings settings) {
+    serialize::Serializator serializator(settings);
+
+    serializator.Deserialize(const_cast<TransportCatalogue&>(db_));
 }
 
 } // transport

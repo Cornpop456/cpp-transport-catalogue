@@ -46,18 +46,19 @@ int main(int argc, char* argv[]) {
     const std::string_view mode(argv[1]);
 
     if (mode == "make_base"sv) {
-
         JsonReader reader(cin);
         reader.FillCatalogue(catalogue);
         RequestHandler handler(catalogue);
 
         handler.Serialize(reader.GetSerializeSettings());
 
-        cout << reader.GetSerializeSettings().file << endl;
-
     } else if (mode == "process_requests"sv) {
+        JsonReader reader(cin);
+        RequestHandler handler(catalogue);
 
-        // process requests here
+        handler.Deserialize(reader.GetSerializeSettings());
+
+        reader.PrintJsonResponse(handler, cout);
 
     } else {
         PrintUsage();

@@ -1,5 +1,7 @@
 #include "transport_catalogue.h"
 
+#include <iostream>
+
 using namespace std;
 
 namespace transport {
@@ -91,6 +93,18 @@ const set<string_view>* TransportCatalogue::GetBusNames() const {
 
 const Bus* TransportCatalogue::GetBus(string_view name) const {
     return busname_to_bus_.at(name);
+}
+
+const std::unordered_map<std::string_view, Stop*> TransportCatalogue::GetStops() const {
+    return stopname_to_stop_;
+}
+
+const std::unordered_map<std::string_view, Bus*> TransportCatalogue::GetBuses() const {
+    return busname_to_bus_;
+}
+
+const std::unordered_map<std::pair<Stop*, Stop*>, int, TransportCatalogue::DistanceHasher> TransportCatalogue::GetDistances() const {
+    return distances_;
 }
 
 BusStat TransportCatalogue::CalculateStat(const string& name) const {

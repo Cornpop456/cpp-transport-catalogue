@@ -27,6 +27,8 @@ public:
 
     void Serialize(serialize::Settings settings);
 
+    void Deserialize(serialize::Settings settings);
+
 private:
     const TransportCatalogue& db_;
 
