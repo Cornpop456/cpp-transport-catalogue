@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "map_renderer.proto";
+
 package proto_catalogue;
 
 message Coordinates {
@@ -34,4 +36,5 @@ message Catalogue {
 
 message TransportCatalogue {
     Catalogue catalogue = 1;
+    proto_map_renderer.RenderSettings render_settings = 2;
 }

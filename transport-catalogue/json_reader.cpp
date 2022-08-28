@@ -12,8 +12,12 @@ const json::Array& JsonReader::GetBaseRequests() const {
     return json_doc_.GetRoot().AsDict().at("base_requests"s).AsArray();
 }
 
-const json::Dict& JsonReader::GetRenderSettings() const {
+const json::Dict& JsonReader::GetRenderSettingsJson() const {
     return json_doc_.GetRoot().AsDict().at("render_settings"s).AsDict();
+}
+
+bool JsonReader::HasRenderSettings() const {
+    return json_doc_.GetRoot().AsDict().count("render_settings"s) > 0;
 }
 
 const json::Array& JsonReader::GetStatRequests() const {
@@ -111,45 +115,13 @@ std::pair<parsed::Stop, parsed::Distances> JsonReader::DictToStopDists(const jso
     return {p_s, p_d};
 }
 
-renderer::MapRenderer JsonReader::GetRenderer(const TransportCatalogue& catalogue) const {
-    vector<geo::Coordinates> all_coords;
-
-    vector<const Bus*> buses;
-
-    auto comp = [] (const Stop* a, const Stop* b) {
-        return a->name < b->name;
-    };
-
-    set<const Stop*, decltype(comp)> stops(comp);
-
-    for (auto el : *catalogue.GetBusNames()) {
-                
-        buses.push_back(catalogue.GetBus(el));
-        
-        const auto& bus_stops = catalogue.GetBus(el)->bus_stops;
-
-        for (const auto stop : bus_stops) {
-            all_coords.push_back(stop->coordinates);
-            stops.insert(stop);
-        }
+optional<renderer::RenderSettings> JsonReader::GetRenderSettings() const {
+    if (HasRenderSettings()) {
+        return DictToRenderSettings(GetRenderSettingsJson());
     }
 
-    renderer::RenderSettings settings = DictToRenderSettings(GetRenderSettings());
-
-    SphereProjector proj(all_coords.begin(), all_coords.end(), 
-        settings.width, 
-        settings.height, 
-        settings.padding);
-
-    all_coords.clear();
-
-    vector<const Stop*> stops_vec(make_move_iterator(stops.begin()), 
-        make_move_iterator(stops.end()));
-
-    renderer::MapRenderer map_renderer(move(proj), move(settings), move(buses), move(stops_vec));
-
-    return map_renderer;
-}
+    return {};
+ }
 
 
 // Оставил наполенние каталога в JsonReader потому что иначе пришлось бы переносить всю логику разбора json запросов

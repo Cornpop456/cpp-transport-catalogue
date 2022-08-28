@@ -13,24 +13,23 @@ void PrintUsage(std::ostream& stream = std::cerr) {
     stream << "Usage: transport_catalogue [make_base|process_requests]\n"sv;
 }
 
-int prev_main() {
-    using namespace transport;
-    using namespace route;
+// int prev_main() {
+//     using namespace transport;
+//     using namespace route;
     
-    TransportCatalogue catalogue;
-    JsonReader reader(cin);
+//     TransportCatalogue catalogue;
+//     JsonReader reader(cin);
 
-    reader.FillCatalogue(catalogue);
+//     reader.FillCatalogue(catalogue);
 
-    RequestHandler handler(catalogue);
+//     RequestHandler handler(catalogue);
 
-    handler.SetTransportRouter(make_unique<TransportRouter>(catalogue, reader.GetRouteSettings()));
-    handler.SetRenderer(make_unique<renderer::MapRenderer>(reader.GetRenderer(catalogue)));
+//     handler.SetTransportRouter(make_unique<TransportRouter>(catalogue, reader.GetRouteSettings()));
 
-    reader.PrintJsonResponse(handler, cout);
+//     reader.PrintJsonResponse(handler, cout);
 
-    return 0;
-}
+//     return 0;
+// }
 
 int main(int argc, char* argv[]) {
     using namespace transport;
@@ -50,7 +49,7 @@ int main(int argc, char* argv[]) {
         reader.FillCatalogue(catalogue);
         RequestHandler handler(catalogue);
 
-        handler.Serialize(reader.GetSerializeSettings());
+        handler.Serialize(reader.GetSerializeSettings(), reader.GetRenderSettings());
 
     } else if (mode == "process_requests"sv) {
         JsonReader reader(cin);
@@ -59,6 +58,10 @@ int main(int argc, char* argv[]) {
         handler.Deserialize(reader.GetSerializeSettings());
 
         reader.PrintJsonResponse(handler, cout);
+
+        // ofstream svg("out.svg");
+
+        // handler.RenderMap().Render(svg);
 
     } else {
         PrintUsage();

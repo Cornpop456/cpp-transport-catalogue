@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package proto_svg;
+
+message Point {
+    double x = 1;
+    double y = 2;
+}
+
+message Rgb {
+    uint32 r = 1;
+    uint32 g = 2;
+    uint32 b = 3;
+}
+
+message Rgba {
+    uint32 r = 1;
+    uint32 g = 2;
+    uint32 b = 3;
+    double o = 4;
+}
+
+message Color {
+    oneof color {
+        string string_color = 2;
+        Rgb rgb_color = 3;
+        Rgba rgba_color = 4;
+    }
+}

@@ -23,10 +23,9 @@ public:
     json::Document GetJsonResponse(const json::Array& requests) const;
 
     void SetTransportRouter(std::unique_ptr<route::TransportRouter>&& router);
-    void SetRenderer(std::unique_ptr<renderer::MapRenderer>&& renderer);
+    void SetRenderer(renderer::RenderSettings render_settings);
 
-    void Serialize(serialize::Settings settings);
-
+    void Serialize(serialize::Settings settings, std::optional<renderer::RenderSettings> render_settings);
     void Deserialize(serialize::Settings settings);
 
 private:

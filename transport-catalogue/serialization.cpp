@@ -11,6 +11,31 @@ void Serializator::SaveTransportCatalogue(const TransportCatalogue& catalogue) {
     SaveDistances(catalogue);
 }
 
+void Serializator::SaveRenderSettings(transport::renderer::RenderSettings render_settings) {
+    auto proto_settings = proto_catalogue_.mutable_render_settings();
+
+    proto_settings->set_width(render_settings.width);
+    proto_settings->set_height(render_settings.height);
+
+    proto_settings->set_padding(render_settings.padding);
+
+    proto_settings->set_line_width(render_settings.line_width);
+    proto_settings->set_stop_radius(render_settings.stop_radius);
+
+    proto_settings->set_bus_label_font_size(render_settings.bus_label_font_size);
+    *proto_settings->mutable_bus_label_offset() = MakeProtoPoint(render_settings.bus_label_offset);
+
+    proto_settings->set_stop_label_font_size(render_settings.stop_label_font_size);
+    *proto_settings->mutable_stop_label_offset() = MakeProtoPoint(render_settings.stop_label_offset);
+
+    *proto_settings->mutable_underlayer_color() = MakeProtoColor(render_settings.underlayer_color);
+    proto_settings->set_underlayer_width(render_settings.underlayer_width);
+
+    for (auto &color : render_settings.color_palette) {
+        *proto_settings->add_color_palette() = MakeProtoColor(color);
+    }
+}
+
 bool Serializator::Serialize() {
     std::ofstream out_file(settings_.file, std::ios::binary);
     
@@ -23,7 +48,9 @@ bool Serializator::Serialize() {
     return true;
 }
 
-bool Serializator::Deserialize(TransportCatalogue& catalogue) {
+bool Serializator::Deserialize(TransportCatalogue& catalogue, 
+    std::optional<transport::renderer::RenderSettings>& result_settings) {
+    
     std::ifstream in_file(settings_.file, std::ios::binary);
     
     if (!in_file.is_open() || !proto_catalogue_.ParseFromIstream(&in_file)) {
@@ -33,6 +60,8 @@ bool Serializator::Deserialize(TransportCatalogue& catalogue) {
     LoadStops(catalogue);
     LoadDistances(catalogue);
     LoadBuses(catalogue);
+
+    LoadRenderSettings(result_settings);
 
     return true;
 }
@@ -87,20 +116,85 @@ void Serializator::SaveDistances(const TransportCatalogue& catalogue) {
     }
 }
 
-proto_catalogue::Coordinates
-Serializator::MakeProtoCoordinates(const geo::Coordinates& coordinates) {
+proto_catalogue::Coordinates Serializator::MakeProtoCoordinates(const geo::Coordinates& coordinates) {
     proto_catalogue::Coordinates proto_coordinates;
     proto_coordinates.set_lat(coordinates.lat);
     proto_coordinates.set_lng(coordinates.lng);
     return proto_coordinates;
 }
 
-geo::Coordinates
-Serializator::MakeCoordinates(const proto_catalogue::Coordinates& proto_coordinates) {
+proto_svg::Point Serializator::MakeProtoPoint(const svg::Point& point) {
+    proto_svg::Point proto_point;
+    proto_point.set_x(point.x);
+    proto_point.set_y(point.y);
+    return proto_point;
+}
+
+proto_svg::Color Serializator::MakeProtoColor(const svg::Color& color) {
+    proto_svg::Color proto_color;
+
+    if (std::holds_alternative<std::string>(color)) {
+        proto_color.set_string_color(std::get<std::string>(color));
+    } else if (std::holds_alternative<svg::Rgb>(color)) {
+        auto &rgb = std::get<svg::Rgb>(color);
+        auto rgb_color = proto_color.mutable_rgb_color();
+
+        rgb_color->set_r(rgb.red);
+        rgb_color->set_g(rgb.green);
+        rgb_color->set_b(rgb.blue);
+    } else if (std::holds_alternative<svg::Rgba>(color)) {
+        auto &rgba = std::get<svg::Rgba>(color);
+        auto rgba_color = proto_color.mutable_rgba_color();
+
+        rgba_color->set_r(rgba.red);
+        rgba_color->set_g(rgba.green);
+        rgba_color->set_b(rgba.blue);
+        rgba_color->set_o(rgba.opacity);
+    }
+
+    return proto_color;
+}
+
+geo::Coordinates Serializator::MakeCoordinates(const proto_catalogue::Coordinates& proto_coordinates) {
     geo::Coordinates coordinates;
     coordinates.lat = proto_coordinates.lat();
     coordinates.lng = proto_coordinates.lng();
     return coordinates;
+}
+
+svg::Point Serializator::MakePoint(const proto_svg::Point& proto_point) {
+    svg::Point point;
+    point.x = proto_point.x();
+    point.y = proto_point.y();
+    return point;
+}
+
+
+svg::Color Serializator::MakeColor(const proto_svg::Color& proto_color) {
+    svg::Color color;
+
+    switch (proto_color.color_case()) {
+        case proto_svg::Color::kStringColor:
+            color = proto_color.string_color();
+        break;
+        case proto_svg::Color::kRgbColor:
+        {
+            auto& proto_rgb = proto_color.rgb_color();
+            color = svg::Rgb(proto_rgb.r(), proto_rgb.g(), proto_rgb.b());
+        }
+        break;
+        case proto_svg::Color::kRgbaColor:
+        {
+            auto& proto_rgba = proto_color.rgba_color();
+            color = svg::Rgba(proto_rgba.r(), proto_rgba.g(), proto_rgba.b(), proto_rgba.o());
+        }
+        break;
+        default:
+            color = svg::NoneColor;
+        break;
+    }
+
+    return color;
 }
 
 void Serializator::LoadStops(TransportCatalogue& catalogue) {
@@ -159,6 +253,44 @@ void Serializator::LoadDistances(TransportCatalogue& catalogue) const {
     for (auto& [from, mp_to] : d_map) {
         catalogue.AddDistances({move(from), move(mp_to)});
     }
+}
+
+void Serializator::LoadRenderSettings(std::optional<transport::renderer::RenderSettings>& result_settings) const {
+    if (!proto_catalogue_.has_render_settings()) {
+        return;
+    }
+
+    auto& proto_settings = proto_catalogue_.render_settings();
+
+    transport::renderer::RenderSettings settings;
+
+    settings.width = proto_settings.width();
+
+    settings.height = proto_settings.height();
+
+    settings.padding = proto_settings.padding();
+
+    settings.line_width = proto_settings.line_width();
+    settings.stop_radius = proto_settings.stop_radius();
+
+    settings.bus_label_font_size = proto_settings.bus_label_font_size();
+    settings.bus_label_offset = MakePoint(proto_settings.bus_label_offset());
+
+    settings.stop_label_font_size = proto_settings.stop_label_font_size();
+    settings.stop_label_offset = MakePoint(proto_settings.stop_label_offset());
+
+    settings.underlayer_color = MakeColor(proto_settings.underlayer_color());
+    settings.underlayer_width = proto_settings.underlayer_width();
+
+    auto color_pallete_count = proto_settings.color_palette_size();
+    settings.color_palette.clear();
+    settings.color_palette.reserve(color_pallete_count);
+
+    for (int i = 0; i < color_pallete_count; ++i) {
+        settings.color_palette.push_back(MakeColor(proto_settings.color_palette(i)));
+    }
+
+    result_settings = settings;
 }
 
 

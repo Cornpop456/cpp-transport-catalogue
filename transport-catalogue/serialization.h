@@ -6,8 +6,8 @@
 
 #include <transport_catalogue.pb.h>
 
+#include "map_renderer.h"
 #include "transport_catalogue.h"
-
 
 namespace serialize {
 
@@ -25,10 +25,11 @@ public:
     Serializator(const Settings& settings) : settings_(settings) {};
 
     void SaveTransportCatalogue(const TransportCatalogue& catalogue);
+    void SaveRenderSettings(transport::renderer::RenderSettings render_settings);
 
     bool Serialize();
 
-    bool Deserialize(TransportCatalogue& catalogue);
+    bool Deserialize(TransportCatalogue& catalogue, std::optional<transport::renderer::RenderSettings>& result_settings);
 
 
 private:
@@ -44,8 +45,15 @@ private:
     void SaveDistances(const TransportCatalogue& catalogue);
     void LoadDistances(TransportCatalogue& catalogue) const;
 
+    void LoadRenderSettings(std::optional<transport::renderer::RenderSettings>& result_settings) const;
+
     static proto_catalogue::Coordinates MakeProtoCoordinates(const geo::Coordinates& coordinates);
+    static proto_svg::Point MakeProtoPoint(const svg::Point& point);
+    static proto_svg::Color MakeProtoColor(const svg::Color& color);
+
     static geo::Coordinates MakeCoordinates(const proto_catalogue::Coordinates& proto_coordinates);
+    static svg::Point MakePoint(const proto_svg::Point& proto_point);
+    static svg::Color MakeColor(const proto_svg::Color& proto_color);
 
     Settings settings_;
 

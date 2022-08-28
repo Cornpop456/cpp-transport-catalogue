@@ -17,7 +17,7 @@ private:
 
     const json::Array& GetBaseRequests() const;
 
-    const json::Dict& GetRenderSettings() const;
+    const json::Dict& GetRenderSettingsJson() const;
 
     const json::Array& GetStatRequests() const; 
 
@@ -32,11 +32,13 @@ private:
 public:
     JsonReader(std::istream& input);
 
-    renderer::MapRenderer GetRenderer(const TransportCatalogue& catalogue) const;
-
     route::RouteSettings GetRouteSettings() const;
 
     serialize::Settings GetSerializeSettings() const;
+
+    std::optional<renderer::RenderSettings> GetRenderSettings() const;
+
+    bool HasRenderSettings() const; 
 
     void FillCatalogue(TransportCatalogue& catalogue) const;
 

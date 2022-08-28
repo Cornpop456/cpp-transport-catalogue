@@ -74,8 +74,40 @@ void RequestHandler::SetTransportRouter(unique_ptr<route::TransportRouter>&& rou
     router_ = move(router);
 }
 
-void RequestHandler::SetRenderer(unique_ptr<renderer::MapRenderer>&& renderer) {
-    renderer_ = move(renderer);
+void RequestHandler::SetRenderer(renderer::RenderSettings settings) {
+    vector<geo::Coordinates> all_coords;
+
+    vector<const Bus*> buses;
+
+    auto comp = [] (const Stop* a, const Stop* b) {
+        return a->name < b->name;
+    };
+
+    set<const Stop*, decltype(comp)> stops(comp);
+
+    for (auto el : *db_.GetBusNames()) {
+                
+        buses.push_back(db_.GetBus(el));
+        
+        const auto& bus_stops = db_.GetBus(el)->bus_stops;
+
+        for (const auto stop : bus_stops) {
+            all_coords.push_back(stop->coordinates);
+            stops.insert(stop);
+        }
+    }
+
+    SphereProjector proj(all_coords.begin(), all_coords.end(), 
+        settings.width, 
+        settings.height, 
+        settings.padding);
+
+    all_coords.clear();
+
+    vector<const Stop*> stops_vec(make_move_iterator(stops.begin()), 
+        make_move_iterator(stops.end()));
+
+    renderer_ = make_unique<renderer::MapRenderer>(move(proj), move(settings), move(buses), move(stops_vec));
 }
 
 optional<BusStat> RequestHandler::GetBusStat(const string& bus_name) const {
@@ -202,18 +234,28 @@ json::Document RequestHandler::GetJsonResponse(const json::Array& requests) cons
     return json::Document(arr_ctx.EndArray().Build());
 }
 
-void RequestHandler::Serialize(serialize::Settings settings) {
+void RequestHandler::Serialize(serialize::Settings settings, optional<renderer::RenderSettings> render_settings) {
     serialize::Serializator serializator(settings);
 
     serializator.SaveTransportCatalogue(db_);
+
+    if (render_settings) {
+       serializator.SaveRenderSettings(move(render_settings.value())); 
+    }
 
     serializator.Serialize();
 }
 
 void RequestHandler::Deserialize(serialize::Settings settings) {
     serialize::Serializator serializator(settings);
+    
+    optional<renderer::RenderSettings> render_settings;
 
-    serializator.Deserialize(const_cast<TransportCatalogue&>(db_));
+    serializator.Deserialize(const_cast<TransportCatalogue&>(db_), render_settings);
+
+    if (render_settings) {
+        SetRenderer(render_settings.value());
+    }
 }
 
 } // transport
