@@ -38,6 +38,8 @@ public:
 
     std::optional<renderer::RenderSettings> GetRenderSettings() const;
 
+    std::optional<route::RouteSettings> GetRouteSettingsOpt() const;
+
     bool HasRenderSettings() const; 
 
     void FillCatalogue(TransportCatalogue& catalogue) const;

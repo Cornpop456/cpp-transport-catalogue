@@ -12,66 +12,9 @@
 
 using namespace std;
 
-namespace {
-
-json::Node GetNodeStop(const route::RouteData& data) {
-    json::Node node_stop{ json::Builder{}.StartDict()
-        .Key("stop_name"s).Value(std::string(data.stop_name))
-        .Key("time"s).Value(data.bus_wait_time)
-        .Key("type"s).Value("Wait"s)
-        .EndDict().Build() };
-        
-    return node_stop;
-}
-
-json::Node GetNodeBus(const route::RouteData& data) {
-    json::Node node_route{ json::Builder{}.StartDict()
-        .Key("bus"s).Value(std::string(data.bus_name))
-        .Key("span_count"s).Value(data.span_count)
-        .Key("time"s).Value(data.motion_time)
-        .Key("type"s).Value("Bus"s)
-        .EndDict().Build() };
-    return node_route;
-}
-
-json::Node GetNodeRoute(const std::vector<route::RouteData>& route_data) {
-    json::Node data_route{ json::Builder{}.StartArray().EndArray().Build() };
-    for (const route::RouteData& data : route_data) {
-        if (data.type == "bus"sv) {
-            const_cast<json::Array&>(data_route.AsArray()).push_back(std::move(GetNodeBus(data)));
-        }
-        else if (data.type == "stop"sv) {
-            const_cast<json::Array&>(data_route.AsArray()).push_back(std::move(GetNodeStop(data)));
-        }
-        else if (data.type == "stay_here"sv) {
-            return data_route;
-        }
-    }
-    return data_route;
-}
-
-double GetTotalTime(const std::vector<route::RouteData>& route_data) {
-    double total_time = 0.0;
-    for (const route::RouteData& data : route_data) {
-        if (data.type == "bus"sv) {
-            total_time += data.motion_time;
-        }
-        else if (data.type == "stop"sv) {
-            total_time += data.bus_wait_time;
-        }
-    }
-    return total_time;
-}
-
-}
-
 namespace transport {
 
  RequestHandler::RequestHandler(const TransportCatalogue& db) : db_(db){
-}
-
-void RequestHandler::SetTransportRouter(unique_ptr<route::TransportRouter>&& router) {
-    router_ = move(router);
 }
 
 void RequestHandler::SetRenderer(renderer::RenderSettings settings) {
@@ -125,6 +68,32 @@ const svg::Document& RequestHandler::RenderMap() const {
     renderer_->AddStopLabelsToSvg();
 
     return renderer_->GetSvgDoc();
+}
+
+bool RequestHandler::ResetRouter() const {
+    if (routing_settings_) {
+        router_ = std::make_unique<route::TransportRouter>(db_, routing_settings_.value());
+        return true;
+    } else {
+        std::cerr << "Can't find routing settings"s << std::endl;
+        return false;
+    }
+}
+
+bool RequestHandler::SetRouter() const {
+    if (!router_) {
+        return ResetRouter();
+    }
+    return true;
+}
+
+std::optional<RequestHandler::Route>
+RequestHandler::BuildRoute(const std::string &from, const std::string &to) const {
+    if (!SetRouter()) {
+        return std::nullopt;
+    } else {
+        return router_->BuildRoute(from, to);
+    }
 }
 
 json::Document RequestHandler::GetJsonResponse(const json::Array& requests) const {
@@ -205,7 +174,7 @@ json::Document RequestHandler::GetJsonResponse(const json::Array& requests) cons
                 .Value(map_string.str())
                 .EndDict();
         } else if (type == "Route"s) {
-            auto route_data = router_->GetRoute(dict.at("from"s).AsString(), dict.at("to"s).AsString());
+            auto route_data = BuildRoute(dict.at("from"s).AsString(), dict.at("to"s).AsString());
 
             if (!route_data) {
                 arr_ctx.StartDict()
@@ -217,15 +186,35 @@ json::Document RequestHandler::GetJsonResponse(const json::Array& requests) cons
                 continue;
             }
 
-            arr_ctx.StartDict()
-                .Key("items"s)
-                .Value(GetNodeRoute(route_data.value()).AsArray())
-                .Key("request_id"s)
-                .Value(id)
-                .Key("total_time")
-                .Value(GetTotalTime(route_data.value()))
-                .EndDict();
+            double total_time = 0;
+            int wait_time = router_->GetSettings().bus_wait_time;
+            json::Array items;
+
+            for (const auto &edge : route_data.value()) {
+                total_time += edge.total_time;
+
+                json::Node wait_elem = json::Builder{}.StartDict().
+                    Key("type"s).Value("Wait"s).
+                    Key("stop_name"s).Value(std::string(edge.stop_from)).
+                    Key("time"s).Value(wait_time).
+                    EndDict().Build();
+                
+                json::Node ride_elem = json::Builder{}.StartDict().
+                    Key("type"s).Value("Bus"s).
+                    Key("bus"s).Value(std::string(edge.bus_name)).
+                    Key("span_count"s).Value(edge.span_count).
+                    Key("time"s).Value(edge.total_time - wait_time).
+                    EndDict().Build();
+                
+                items.push_back(wait_elem);
+                items.push_back(ride_elem);
+            }
             
+            arr_ctx.StartDict()
+                .Key("request_id"s).Value(id)
+                .Key("total_time"s).Value(total_time)
+                .Key("items"s).Value(items)
+                .EndDict();
         } else {
             throw invalid_argument("wrong query to catalogue"s);
         }
@@ -234,13 +223,22 @@ json::Document RequestHandler::GetJsonResponse(const json::Array& requests) cons
     return json::Document(arr_ctx.EndArray().Build());
 }
 
-void RequestHandler::Serialize(serialize::Settings settings, optional<renderer::RenderSettings> render_settings) {
+void RequestHandler::Serialize(serialize::Settings settings, 
+    optional<renderer::RenderSettings> render_settings,
+    optional<route::RouteSettings> route_settings) {
+    
     serialize::Serializator serializator(settings);
 
     serializator.SaveTransportCatalogue(db_);
 
     if (render_settings) {
        serializator.SaveRenderSettings(move(render_settings.value())); 
+    }
+
+    if (route_settings) {
+        router_ = std::make_unique<route::TransportRouter>(db_, route_settings.value());
+        router_->InitRouter();
+        serializator.SaveTransportRouter(*router_.get());
     }
 
     serializator.Serialize();
@@ -251,7 +249,11 @@ void RequestHandler::Deserialize(serialize::Settings settings) {
     
     optional<renderer::RenderSettings> render_settings;
 
-    serializator.Deserialize(const_cast<TransportCatalogue&>(db_), render_settings);
+    serializator.Deserialize(const_cast<TransportCatalogue&>(db_), render_settings, router_);
+
+    if (router_) {
+        routing_settings_ = router_->GetSettings();
+    }
 
     if (render_settings) {
         SetRenderer(render_settings.value());

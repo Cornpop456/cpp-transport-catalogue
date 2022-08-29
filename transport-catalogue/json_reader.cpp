@@ -30,6 +30,16 @@ route::RouteSettings JsonReader::GetRouteSettings() const {
     return {settings.at("bus_wait_time").AsInt(), settings.at("bus_velocity").AsInt()};
 }
 
+optional<route::RouteSettings> JsonReader::GetRouteSettingsOpt() const {
+    if (json_doc_.GetRoot().AsDict().count("routing_settings"s) > 0) {
+        const json::Dict& settings =  json_doc_.GetRoot().AsDict().at("routing_settings"s).AsDict();
+
+        return route::RouteSettings{settings.at("bus_wait_time").AsInt(), settings.at("bus_velocity").AsInt()};
+    }
+
+    return {};
+}
+
 serialize::Settings JsonReader::GetSerializeSettings() const {
     return {json_doc_.GetRoot().AsDict().at("serialization_settings"s).AsDict().at("file").AsString()};
 }

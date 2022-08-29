@@ -15,6 +15,8 @@ int TransportCatalogue::GetStopId(const std::string_view& name) const {
 }
 
 void TransportCatalogue::AddStop(const parsed::Stop& stop) {
+    int tmp_id = stop_id_;
+
     Stop s = Stop{stop.name, geo::Coordinates{stop.lat, stop.lng}, set<string_view>{}, stop_id_++};
     
     stops_.push_back(move(s));
@@ -22,6 +24,7 @@ void TransportCatalogue::AddStop(const parsed::Stop& stop) {
     Stop* added = &stops_.back();
 
     stopname_to_stop_[string_view{added->name}] = added;
+    stop_id_to_stop_[tmp_id] = added;
 }
 
 void TransportCatalogue::AddDistances(const parsed::Distances& dists) {
@@ -72,6 +75,10 @@ optional<BusStat> TransportCatalogue::GetBusStat(const string& name) const {
     }
 
     return bus_stats_.at(name);
+}
+
+std::string TransportCatalogue::GetStopNameById(int id) const {
+    return stop_id_to_stop_.at(id)->name;
 }
 
 set<string_view>* TransportCatalogue::GetBusesThroughStop(const string& name) const {

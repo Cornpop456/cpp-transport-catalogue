@@ -49,7 +49,8 @@ bool Serializator::Serialize() {
 }
 
 bool Serializator::Deserialize(TransportCatalogue& catalogue, 
-    std::optional<transport::renderer::RenderSettings>& result_settings) {
+    std::optional<transport::renderer::RenderSettings>& result_settings,
+    std::unique_ptr<route::TransportRouter>& router) {
     
     std::ifstream in_file(settings_.file, std::ios::binary);
     
@@ -63,44 +64,53 @@ bool Serializator::Deserialize(TransportCatalogue& catalogue,
 
     LoadRenderSettings(result_settings);
 
+    LoadTransportRouter(catalogue, router);
+
     return true;
 }
 
 void Serializator::SaveStops(const TransportCatalogue& catalogue) {
-    auto &stops = catalogue.GetStops();
-    
-    uint32_t id = 0;
+    auto comp = [] (const transport::Stop* a, const transport::Stop* b) {
+        return a->id < b->id;
+    };
 
-    for (auto [name, stop] : stops) {
+    std::set<const transport::Stop*, decltype(comp)> stops(comp);
+
+    for (const auto& [stop_name, stop] : catalogue.GetStops()) {
+              
+        stops.insert(stop);
+    }
+    
+    
+    for (auto stop : stops) {
         proto_catalogue::Stop proto_stop;
-        proto_stop.set_id(id);
+        proto_stop.set_id(stop->id);
         proto_stop.set_name(stop->name);
         *proto_stop.mutable_coordinates() = MakeProtoCoordinates(stop->coordinates);
-        stop_id_by_name_.insert({name, id++});
         *proto_catalogue_.mutable_catalogue()->add_stop() = std::move(proto_stop);
     }
 }
 
 void Serializator::SaveBuses(const TransportCatalogue &catalogue) {
-    auto &routes = catalogue.GetBuses();
+    auto& buses = catalogue.GetBuses();
     uint32_t id = 0;
     
-    for (auto [name, bus] : routes) {
+    for (auto [name, bus] : buses) {
         proto_catalogue::Bus proto_bus;
         proto_bus.set_id(id);
         proto_bus.set_name(bus->name);
         proto_bus.set_circular(bus->circular);
-        SaveBusStops(*bus, proto_bus);
+        SaveBusStops(*bus, proto_bus, catalogue);
         bus_id_by_name_.insert({name, id++});
         *proto_catalogue_.mutable_catalogue()->add_bus() = std::move(proto_bus);
     }
 }
 
 void Serializator::SaveBusStops(const transport::Bus& bus,
-    proto_catalogue::Bus& proto_bus) {
+    proto_catalogue::Bus& proto_bus, const TransportCatalogue& catalogue) {
     
     for (auto stop : bus.bus_stops) {
-        proto_bus.add_stop_id(stop_id_by_name_.at(stop->name));
+        proto_bus.add_stop_id(catalogue.GetStopId(stop->name));
     }
 }
 
@@ -109,24 +119,90 @@ void Serializator::SaveDistances(const TransportCatalogue& catalogue) {
     
     for (auto &[from_to, length] : distances) {
         proto_catalogue::Distance proto_distance;
-        proto_distance.set_stop_id_from(stop_id_by_name_.at(from_to.first->name));
-        proto_distance.set_stop_id_to(stop_id_by_name_.at(from_to.second->name));
+        
+        proto_distance.set_stop_id_from(catalogue.GetStopId(from_to.first->name));
+        proto_distance.set_stop_id_to(catalogue.GetStopId(from_to.second->name));
         proto_distance.set_length(length);
+        
         *proto_catalogue_.mutable_catalogue()->add_distance() = std::move(proto_distance);
+    }
+}
+
+void Serializator::SaveTransportRouter(const route::TransportRouter& router) {
+    SaveTransportRouterSettings(router.GetSettings());
+    SaveGraph(router.GetGraph());
+    SaveRouter(router.GetRouter());
+}
+
+void Serializator::SaveTransportRouterSettings(const route::RouteSettings& routing_settings) {
+    auto proto_settings = proto_catalogue_.mutable_router()->mutable_settings();
+
+    proto_settings->set_wait_time(routing_settings.bus_wait_time);
+    proto_settings->set_velocity(routing_settings.bus_velocity);
+}
+
+void Serializator::SaveGraph(const route::TransportRouter::Graph &graph) {
+    auto proto_graph = proto_catalogue_.mutable_router()->mutable_graph();
+
+    for (auto &edge : graph.GetEdges()) {
+        proto_graph::Edge proto_edge;
+        proto_edge.set_from(edge.from);
+        proto_edge.set_to(edge.to);
+        *proto_edge.mutable_weight() = MakeProtoWeight(edge.weight);
+        
+        *proto_graph->add_edges() = std::move(proto_edge);
+    }
+
+    for (auto &list : graph.GetIncidenceLists()) {
+        auto proto_list = proto_graph->add_incidence_lists();
+        
+        for (auto id : list) {
+            proto_list->add_edge_id(id);
+        }
+    }
+
+}
+
+void Serializator::SaveRouter(const std::unique_ptr<route::TransportRouter::Router>& router) {
+    auto proto_router = proto_catalogue_.mutable_router()->mutable_router();
+
+    for (const auto& data : router->GetRoutesInternalData()) {
+        proto_graph::RoutesInternalData proto_data;
+        
+        for (const auto &internal : data) {
+            proto_graph::OptionalRouteInternalData proto_internal;
+            
+            if (internal.has_value()) {
+                auto& value = internal.value();
+                auto proto_value = proto_internal.mutable_route_internal_data();
+                
+                proto_value->set_total_time(value.weight.total_time);
+                
+                if (value.prev_edge.has_value()) {
+                    proto_value->set_prev_edge(value.prev_edge.value());
+                }
+            }
+            *proto_data.add_routes_internal_data() = std::move(proto_internal);
+        }
+        *proto_router->add_routes_internal_data() = std::move(proto_data);
     }
 }
 
 proto_catalogue::Coordinates Serializator::MakeProtoCoordinates(const geo::Coordinates& coordinates) {
     proto_catalogue::Coordinates proto_coordinates;
+    
     proto_coordinates.set_lat(coordinates.lat);
     proto_coordinates.set_lng(coordinates.lng);
+    
     return proto_coordinates;
 }
 
 proto_svg::Point Serializator::MakeProtoPoint(const svg::Point& point) {
     proto_svg::Point proto_point;
+    
     proto_point.set_x(point.x);
     proto_point.set_y(point.y);
+    
     return proto_point;
 }
 
@@ -155,17 +231,31 @@ proto_svg::Color Serializator::MakeProtoColor(const svg::Color& color) {
     return proto_color;
 }
 
+proto_graph::RouteWeight Serializator::MakeProtoWeight(const route::RouteWeight &weight) const {
+    proto_graph::RouteWeight proto_weight;
+    
+    proto_weight.set_bus_id(bus_id_by_name_.at(weight.bus_name));
+    proto_weight.set_span_count(weight.span_count);
+    proto_weight.set_total_time(weight.total_time);
+    
+    return proto_weight;
+}
+
 geo::Coordinates Serializator::MakeCoordinates(const proto_catalogue::Coordinates& proto_coordinates) {
     geo::Coordinates coordinates;
+    
     coordinates.lat = proto_coordinates.lat();
     coordinates.lng = proto_coordinates.lng();
+    
     return coordinates;
 }
 
 svg::Point Serializator::MakePoint(const proto_svg::Point& proto_point) {
     svg::Point point;
+    
     point.x = proto_point.x();
     point.y = proto_point.y();
+    
     return point;
 }
 
@@ -197,6 +287,20 @@ svg::Color Serializator::MakeColor(const proto_svg::Color& proto_color) {
     return color;
 }
 
+route::RouteWeight Serializator::MakeWeight(const TransportCatalogue& catalogue,
+    const proto_graph::RouteWeight& proto_weight) const {
+    
+    route::RouteWeight weight;
+
+    auto route_name = catalogue.GetBuses().at(bus_name_by_id_.at(proto_weight.bus_id()));
+    
+    weight.bus_name = route_name->name;
+    weight.span_count = proto_weight.span_count();
+    weight.total_time = proto_weight.total_time();
+    
+    return weight;
+}
+
 void Serializator::LoadStops(TransportCatalogue& catalogue) {
     auto stops_count = proto_catalogue_.catalogue().stop_size();
     
@@ -205,8 +309,7 @@ void Serializator::LoadStops(TransportCatalogue& catalogue) {
 
         auto coords = MakeCoordinates(proto_stop.coordinates());
 
-        catalogue.AddStop({proto_stop.name(), coords.lat, coords.lng});
-        stop_name_by_id_.insert({proto_stop.id(), proto_stop.name()});
+        catalogue.AddStop({proto_stop.name(), coords.lat, coords.lng});;
     }
 }
 
@@ -221,7 +324,8 @@ void Serializator::LoadBuses(TransportCatalogue &catalogue) {
 }
 
 void Serializator::LoadBus(TransportCatalogue& catalogue,
-                             const proto_catalogue::Bus& proto_bus) const {
+    const proto_catalogue::Bus& proto_bus) const {
+    
     auto stops_count = proto_bus.stop_id_size();
     
     std::vector<std::string> stops;
@@ -229,8 +333,8 @@ void Serializator::LoadBus(TransportCatalogue& catalogue,
     stops.reserve(stops_count);
     
     for(int i = 0; i < stops_count; ++i) {
-        auto stop_name = stop_name_by_id_.at(proto_bus.stop_id(i));
-        stops.push_back(std::string(stop_name));
+        auto stop_name = catalogue.GetStopNameById(proto_bus.stop_id(i));
+        stops.push_back(stop_name);
     }
 
     catalogue.AddBus({proto_bus.name(), move(stops), proto_bus.circular()});
@@ -242,10 +346,10 @@ void Serializator::LoadDistances(TransportCatalogue& catalogue) const {
     auto distances_count = proto_catalogue_.catalogue().distance_size();
     
     for (int i = 0; i < distances_count; ++i) {
-        auto &proto_distance = proto_catalogue_.catalogue().distance(i);
+        auto& proto_distance = proto_catalogue_.catalogue().distance(i);
         
-        auto stop_from = std::string(stop_name_by_id_.at(proto_distance.stop_id_from()));
-        auto stop_to = std::string(stop_name_by_id_.at(proto_distance.stop_id_to()));
+        auto stop_from = catalogue.GetStopNameById(proto_distance.stop_id_from());
+        auto stop_to = catalogue.GetStopNameById(proto_distance.stop_id_to());
 
         d_map[stop_from][stop_to] = proto_distance.length();
     }
@@ -291,6 +395,99 @@ void Serializator::LoadRenderSettings(std::optional<transport::renderer::RenderS
     }
 
     result_settings = settings;
+}
+
+void Serializator::LoadTransportRouter(const TransportCatalogue& catalogue,
+    std::unique_ptr<route::TransportRouter>& transport_router) {
+
+    if (!proto_catalogue_.has_router()) {
+        return;
+    }
+
+    route::RouteSettings routing_settings;
+    LoadTransportRouterSettings(routing_settings);
+
+    transport_router = std::make_unique<route::TransportRouter>(catalogue, routing_settings);
+
+    LoadGraph(catalogue, transport_router->GetGraph());
+
+    transport_router->GetRouter() =
+        std::make_unique<route::TransportRouter::Router>(transport_router->GetGraph(), false);
+    LoadRouter(catalogue, transport_router->GetRouter());
+
+    transport_router->InternalInit();
+}
+
+void Serializator::LoadTransportRouterSettings(route::RouteSettings& routing_settings) const {
+    auto &proto_settings = proto_catalogue_.router().settings();
+
+    routing_settings.bus_wait_time = proto_settings.wait_time();
+    routing_settings.bus_velocity = proto_settings.velocity();
+}
+
+void Serializator::LoadGraph(const TransportCatalogue& catalogue, route::TransportRouter::Graph& graph) {
+    auto &proto_graph = proto_catalogue_.router().graph();
+    auto edge_count = proto_graph.edges_size();
+
+    for (auto i = 0; i < edge_count; ++i) {
+        graph::Edge<route::RouteWeight> edge;
+        auto &proto_edge = proto_graph.edges(i);
+        
+        edge.from = proto_edge.from();
+        edge.to = proto_edge.to();
+        edge.weight = MakeWeight(catalogue, proto_edge.weight());
+        
+        graph.GetEdges().push_back(std::move(edge));
+    }
+
+    auto incidence_lists_count = proto_graph.incidence_lists_size();
+    
+    for (auto i = 0; i < incidence_lists_count; ++i) {
+        route::TransportRouter::Graph::IncidenceList list;
+        
+        auto &proto_list = proto_graph.incidence_lists(i);
+        auto list_count = proto_list.edge_id_size();
+        
+        for (auto j = 0; j < list_count; ++j) {
+            list.push_back(proto_list.edge_id(j));
+        }
+        
+        graph.GetIncidenceLists().push_back(list);
+    }
+}
+
+void Serializator::LoadRouter(const TransportCatalogue& catalogue,
+    std::unique_ptr<route::TransportRouter::Router>& router) {
+    
+    auto &proto_router = proto_catalogue_.router().router();
+    auto &routes_internal_data = router->GetRoutesInternalData();
+
+    auto routes_internal_data_count = proto_router.routes_internal_data_size();
+
+    for (int i = 0; i < routes_internal_data_count; ++i) {
+        auto& proto_internal_data = proto_router.routes_internal_data(i);
+        auto internal_data_count = proto_internal_data.routes_internal_data_size();
+        
+        for (int j = 0; j < internal_data_count; ++j) {
+            auto& proto_optional_data = proto_internal_data.routes_internal_data(j);
+            
+            if (proto_optional_data.optional_route_internal_data_case() ==  proto_graph::OptionalRouteInternalData::kRouteInternalData) { 
+                route::TransportRouter::Router::RouteInternalData data;
+                auto& proto_data = proto_optional_data.route_internal_data();
+                data.weight.total_time = proto_data.total_time();
+                
+                if (proto_data.optional_prev_edge_case() == proto_graph::RouteInternalData::kPrevEdge) {
+                    data.prev_edge = proto_data.prev_edge();
+                } else {
+                    data.prev_edge = std::nullopt;
+                }
+                routes_internal_data[i][j] = std::move(data);
+            } else {
+                routes_internal_data[i][j] = std::nullopt;
+            }
+        }
+    }
+
 }
 
 

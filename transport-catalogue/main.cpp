@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
         reader.FillCatalogue(catalogue);
         RequestHandler handler(catalogue);
 
-        handler.Serialize(reader.GetSerializeSettings(), reader.GetRenderSettings());
+        handler.Serialize(reader.GetSerializeSettings(), reader.GetRenderSettings(), reader.GetRouteSettingsOpt());
 
     } else if (mode == "process_requests"sv) {
         JsonReader reader(cin);
