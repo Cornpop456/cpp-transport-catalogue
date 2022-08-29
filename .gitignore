@@ -32,7 +32,6 @@
 *.app
 
 # input output text files
-*.txt
 *.json
 *.svg
 
